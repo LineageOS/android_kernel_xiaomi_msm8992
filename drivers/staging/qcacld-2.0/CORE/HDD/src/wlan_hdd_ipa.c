@@ -430,6 +430,7 @@ struct hdd_ipa_priv {
 	struct ipa_wdi_in_params cons_pipe_in;
 	struct ipa_wdi_in_params prod_pipe_in;
 	v_BOOL_t uc_loaded;
+	v_BOOL_t wdi_enabled;
 #endif /* IPA_UC_OFFLOAD */
 };
 
@@ -1045,28 +1046,39 @@ static void hdd_ipa_uc_op_cb(struct op_msg_type *op_msg, void *usr_ctxt)
 		hdd_ipa->activated_fw_pipe++;
 		if (HDD_IPA_UC_NUM_WDI_PIPE == hdd_ipa->activated_fw_pipe) {
 			hdd_ipa->resource_loading = VOS_FALSE;
+			if (VOS_FALSE == hdd_ipa->wdi_enabled) {
+				hdd_ipa->wdi_enabled = VOS_TRUE;
+				/* WDI enable message to IPA */
+				meta.msg_len = sizeof(*ipa_msg);
+				ipa_msg = adf_os_mem_alloc(NULL, meta.msg_len);
+				if (ipa_msg == NULL) {
+					hddLog(VOS_TRACE_LEVEL_ERROR,
+						"msg allocation failed");
+					adf_os_mem_free(op_msg);
+					vos_lock_release(&hdd_ipa->event_lock);
+					return;
+				}
 
-			/* WDI enable message to IPA */
-			meta.msg_len = sizeof(*ipa_msg);
-			ipa_msg = adf_os_mem_alloc(NULL, meta.msg_len);
-			if (ipa_msg == NULL) {
-				hddLog(VOS_TRACE_LEVEL_ERROR,
-					"msg allocation failed");
-				adf_os_mem_free(op_msg);
-				vos_lock_release(&hdd_ipa->event_lock);
-				return;
+				meta.msg_type = WLAN_WDI_ENABLE;
+				hddLog(VOS_TRACE_LEVEL_INFO,
+					"ipa_send_msg(Evt:%d)", meta.msg_type);
+				ret = ipa_send_msg(&meta, ipa_msg,
+					hdd_ipa_msg_free_fn);
+				if (ret) {
+					hddLog(VOS_TRACE_LEVEL_ERROR,
+						"ipa_send_msg(Evt:%d)-fail=%d",
+					meta.msg_type,  ret);
+					adf_os_mem_free(ipa_msg);
+				}
+#ifdef IPA_UC_STA_OFFLOAD
+				else {
+					/* Send SCC/MCC Switching event to IPA */
+					hdd_ipa_send_mcc_scc_msg(hdd_ctx,
+						hdd_ctx->mcc_mode);
+				}
+#endif
 			}
 
-			meta.msg_type = WLAN_WDI_ENABLE;
-			hddLog(VOS_TRACE_LEVEL_INFO,
-				"ipa_send_msg(Evt:%d)", meta.msg_type);
-			ret = ipa_send_msg(&meta, ipa_msg, hdd_ipa_msg_free_fn);
-			if (ret) {
-				hddLog(VOS_TRACE_LEVEL_ERROR,
-					"ipa_send_msg(Evt:%d) - fail=%d",
-				meta.msg_type,  ret);
-				adf_os_mem_free(ipa_msg);
-			}
 			hdd_ipa_uc_proc_pending_event(hdd_ipa);
 		}
 		vos_lock_release(&hdd_ipa->event_lock);
@@ -1076,28 +1088,6 @@ static void hdd_ipa_uc_op_cb(struct op_msg_type *op_msg, void *usr_ctxt)
 		hdd_ipa->activated_fw_pipe--;
 		if (!hdd_ipa->activated_fw_pipe) {
 			hdd_ipa_uc_disable_pipes(hdd_ipa);
-
-			/* WDI disable message to IPA */
-			meta.msg_len = sizeof(*ipa_msg);
-			ipa_msg = adf_os_mem_alloc(NULL, meta.msg_len);
-			if (ipa_msg == NULL) {
-				hddLog(VOS_TRACE_LEVEL_ERROR,
-					"msg allocation failed");
-				vos_lock_release(&hdd_ipa->event_lock);
-				adf_os_mem_free(op_msg);
-				return;
-			}
-			meta.msg_type = WLAN_WDI_DISABLE;
-			hddLog(VOS_TRACE_LEVEL_INFO,
-				"ipa_send_msg(Evt:%d)", meta.msg_type);
-			ret = ipa_send_msg(&meta, ipa_msg, hdd_ipa_msg_free_fn);
-			if (ret) {
-				hddLog(VOS_TRACE_LEVEL_ERROR,
-					"ipa_send_msg(Evt:%d) - fail=%d",
-				meta.msg_type,  ret);
-				adf_os_mem_free(ipa_msg);
-			}
-
 			if ((hdd_ipa_is_rm_enabled(hdd_ipa)) &&
 			(!ipa_rm_release_resource(IPA_RM_RESOURCE_WLAN_PROD))) {
 				/* Sync return success from IPA
@@ -3546,11 +3536,13 @@ static void hdd_ipa_debugfs_remove(struct hdd_ipa_priv *hdd_ipa)
 VOS_STATUS hdd_ipa_init(hdd_context_t *hdd_ctx)
 {
 	struct hdd_ipa_priv *hdd_ipa = NULL;
-	int ret, i;
+	int ret=0, i;
 	struct hdd_ipa_iface_context *iface_context = NULL;
 #ifdef IPA_UC_OFFLOAD
 	struct ipa_wdi_uc_ready_params uc_ready_param;
 #endif /* IPA_UC_OFFLOAD */
+	struct ipa_msg_meta meta;
+	struct ipa_wlan_msg *ipa_msg;
 
 	if (!hdd_ipa_is_enabled(hdd_ctx))
 		return VOS_STATUS_SUCCESS;
@@ -3596,6 +3588,7 @@ VOS_STATUS hdd_ipa_init(hdd_context_t *hdd_ctx)
 		hdd_ipa->ipa_rx_packets_diff = 0;
 		hdd_ipa->ipa_p_tx_packets = 0;
 		hdd_ipa->ipa_p_rx_packets = 0;
+		hdd_ipa->wdi_enabled = VOS_FALSE;
 		hdd_ipa->uc_loaded = VOS_FALSE;
 		uc_ready_param.priv = (void *)hdd_ipa;
 		uc_ready_param.notify = hdd_ipa_uc_loaded_uc_cb;
@@ -3608,6 +3601,26 @@ VOS_STATUS hdd_ipa_init(hdd_context_t *hdd_ctx)
 			HDD_IPA_LOG(VOS_TRACE_LEVEL_ERROR,
 				"UC Ready");
 			hdd_ipa->uc_loaded = VOS_TRUE;
+		} else {
+			/* WDI disable message to IPA */
+			meta.msg_len = sizeof(*ipa_msg);
+			ipa_msg = adf_os_mem_alloc(NULL, meta.msg_len);
+			if (ipa_msg == NULL) {
+				hddLog(VOS_TRACE_LEVEL_ERROR,
+					"msg allocation failed");
+				goto fail_setup_rm;
+			}
+			meta.msg_type = WLAN_WDI_DISABLE;
+			hddLog(VOS_TRACE_LEVEL_INFO,
+				"ipa_send_msg(Evt:%d)", meta.msg_type);
+			ret = ipa_send_msg(&meta, ipa_msg, hdd_ipa_msg_free_fn);
+			if (ret) {
+				hddLog(VOS_TRACE_LEVEL_ERROR,
+					"ipa_send_msg(Evt:%d) - fail=%d",
+					meta.msg_type, ret);
+				adf_os_mem_free(ipa_msg);
+				goto fail_setup_rm;
+			}
 		}
 		hdd_ipa_uc_ol_init(hdd_ctx);
 	} else
