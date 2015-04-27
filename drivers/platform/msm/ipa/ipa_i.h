@@ -1114,6 +1114,7 @@ struct ipacm_client_info {
  * @wcstats: wlan common buffer stats
  * @uc_ctx: uC interface context
  * @uc_wdi_ctx: WDI specific fields for uC interface
+ * @ipa_client_apps_wan_cons_agg_gro: RMNET_IOCTL_INGRESS_FORMAT_AGG_DATA
 
  * IPA context - holds all relevant info about IPA driver and its state
  */
@@ -1205,6 +1206,9 @@ struct ipa_context {
 	u32 wan_rx_ring_size;
 	/* M-release support to know client pipes */
 	struct ipacm_client_info ipacm_client[IPA_NUM_PIPES];
+
+	/* RMNET_IOCTL_INGRESS_FORMAT_AGG_DATA */
+	bool ipa_client_apps_wan_cons_agg_gro;
 };
 
 /**
