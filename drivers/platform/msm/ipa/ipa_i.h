@@ -748,6 +748,11 @@ struct ipa_active_clients {
 	int cnt;
 };
 
+struct ipa_wakelock_ref_cnt {
+	spinlock_t spinlock;
+	int cnt;
+};
+
 struct ipa_tag_completion {
 	struct completion comp;
 	atomic_t cnt;
@@ -1115,6 +1120,8 @@ struct ipacm_client_info {
  * @uc_ctx: uC interface context
  * @uc_wdi_ctx: WDI specific fields for uC interface
  * @ipa_client_apps_wan_cons_agg_gro: RMNET_IOCTL_INGRESS_FORMAT_AGG_DATA
+ * @w_lock: Indicates the wakeup source.
+ * @wakelock_ref_cnt: Indicates the number of times wakelock is acquired
 
  * IPA context - holds all relevant info about IPA driver and its state
  */
@@ -1209,6 +1216,9 @@ struct ipa_context {
 
 	/* RMNET_IOCTL_INGRESS_FORMAT_AGG_DATA */
 	bool ipa_client_apps_wan_cons_agg_gro;
+	
+	struct wakeup_source w_lock;
+	struct ipa_wakelock_ref_cnt wakelock_ref_cnt;
 };
 
 /**
@@ -1562,4 +1572,6 @@ int ipa_uc_mhi_stop_event_update_channel(int channelHandle);
 int ipa_uc_mhi_print_stats(char *dbg_buff, int size);
 int ipa_uc_memcpy(phys_addr_t dest, phys_addr_t src, int len);
 void ipa_sps_irq_rx_notify_all(void);
+void ipa_inc_acquire_wakelock(void);
+void ipa_dec_release_wakelock(void);
 #endif /* _IPA_I_H_ */
