@@ -1,7 +1,7 @@
 /*
  * Synaptics DSX touchscreen driver
  *
- * Copyright (c) 2014, The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2016, The Linux Foundation.  All rights reserved.
  *
  * Linux foundation chooses to take subject only to the GPLv2 license terms,
  * and distributes only under these terms.
@@ -316,6 +316,9 @@ static int synaptics_dsx_parse_dt(struct device *dev,
 
 	rmi4_pdata->disable_gpios = of_property_read_bool(np,
 			"synaptics,disable-gpios");
+
+	rmi4_pdata->resume_in_workqueue = of_property_read_bool(np,
+			"synaptics,resume-in-workqueue");
 
 	rmi4_pdata->reset_delay_ms = RESET_DELAY;
 	rc = of_property_read_u32(np, "synaptics,reset-delay-ms", &temp_val);
