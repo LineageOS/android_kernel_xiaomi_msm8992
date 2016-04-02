@@ -152,6 +152,9 @@ struct input_dev {
 
 	unsigned int repeat_key;
 	struct timer_list timer;
+	u64 input_active_start;
+	u64 input_active_count;
+	struct timer_list counter;
 
 	int rep[REP_CNT];
 
