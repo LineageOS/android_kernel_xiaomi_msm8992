@@ -2081,6 +2081,12 @@ static int dwc3_gadget_vbus_session(struct usb_gadget *_gadget, int is_active)
 	/* Mark that the vbus was powered */
 	dwc->vbus_active = is_active;
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (is_active == 1) {
+		_gadget->usb_sys_state = GADGET_STATE_IDLE;
+	}
+#endif
+
 	/*
 	 * Check if upper level usb_gadget_driver was already registerd with
 	 * this udc controller driver (if dwc3_gadget_start was called)
@@ -2234,6 +2240,10 @@ static int dwc3_gadget_start(struct usb_gadget *g,
 	}
 
 	dwc->gadget_driver	= driver;
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	dwc->gadget.dev.driver	= &driver->driver;
+	dwc->gadget.usb_sys_state = GADGET_STATE_IDLE;
+#endif
 
 	/*
 	 * For DRD, this might get called by gadget driver during bootup
@@ -3073,6 +3083,10 @@ static void dwc3_gadget_conndone_interrupt(struct dwc3 *dwc)
 	dwc->speed = speed;
 
 	dwc3_update_ram_clk_sel(dwc, speed);
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	dwc->link_state = dwc3_get_link_state(dwc);
+	pr_debug("%s(): LINK_STATE:%d\n", __func__, dwc->link_state);
+#endif
 
 	switch (speed) {
 	case DWC3_DCFG_SUPERSPEED:

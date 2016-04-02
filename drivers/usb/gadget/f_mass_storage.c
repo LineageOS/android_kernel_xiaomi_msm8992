@@ -1237,7 +1237,11 @@ static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 	struct fsg_lun *curlun = common->curlun;
 	u8	*buf = (u8 *) bh->buf;
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (!curlun || !curlun->filp) {		/* Unsupported LUNs are okay */
+#else
 	if (!curlun) {		/* Unsupported LUNs are okay */
+#endif
 		common->bad_lun_okay = 1;
 		memset(buf, 0, 36);
 		buf[0] = 0x7f;		/* Unsupported, no device-type */
@@ -1245,6 +1249,9 @@ static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 		return 36;
 	}
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	curlun->cdrom = android_is_set_cdrom();
+#endif
 	buf[0] = curlun->cdrom ? TYPE_ROM : TYPE_DISK;
 	buf[1] = curlun->removable ? 0x80 : 0;
 	buf[2] = 2;		/* ANSI SCSI level 2 */

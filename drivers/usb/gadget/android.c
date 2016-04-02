@@ -43,6 +43,9 @@
 #ifdef CONFIG_SND_RAWMIDI
 #include "f_midi.c"
 #endif
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+static int android_is_set_cdrom(void);
+#endif
 #include "f_mass_storage.c"
 #define USB_ETH_RNDIS y
 #include "f_diag.c"
@@ -2459,6 +2462,13 @@ static int mass_storage_function_init(struct android_usb_function *f,
 		config->fsg.nluns++;
 	}
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	config->fsg.luns[0].cdrom = 1;
+	config->fsg.luns[0].ro = 1;
+	config->fsg.luns[0].removable = 1;
+	config->fsg.luns[0].nofua = 1;
+#endif
+
 	common = fsg_common_init(NULL, cdev, &config->fsg);
 	if (IS_ERR(common)) {
 		kfree(config);
@@ -3607,6 +3617,19 @@ static int android_usb_unbind(struct usb_composite_dev *cdev)
 static int (*composite_setup_func)(struct usb_gadget *gadget, const struct usb_ctrlrequest *c);
 static void (*composite_suspend_func)(struct usb_gadget *gadget);
 static void (*composite_resume_func)(struct usb_gadget *gadget);
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+static int android_is_set_cdrom(void)
+{
+	struct android_dev *dev = NULL;
+	/* Find the android dev from the list */
+	list_for_each_entry(dev, &android_dev_list, list_item) {
+		if (dev && dev->cdev && dev->cdev->gadget &&  dev->cdev->gadget->usb_sys_state == GADGET_STATE_DONE_SET)
+			return 0;
+	}
+	return 1;
+}
+#endif
 
 static int
 android_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *c)
