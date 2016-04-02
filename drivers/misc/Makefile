@@ -70,3 +70,4 @@ obj-$(CONFIG_QCOM_LIQUID_DOCK)	+= qcom_liquid_dock.o
 obj-y				+= qcom/
 obj-$(CONFIG_STM32_FW_UPDATER) += stm32fwu.o
 stm32fwu-objs := stm32-fwu-i2c.o stm32-bootloader.o
+obj-$(CONFIG_TYPEC_DRIVER) += type-c/
