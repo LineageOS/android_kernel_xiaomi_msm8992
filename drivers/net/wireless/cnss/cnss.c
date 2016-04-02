@@ -48,6 +48,7 @@
 #include <soc/qcom/ramdump.h>
 #include <soc/qcom/memory_dump.h>
 #include <net/cnss.h>
+#include <asm/bootinfo.h>
 
 #define subsys_to_drv(d) container_of(d, struct cnss_data, subsys_desc)
 
@@ -852,6 +853,12 @@ int cnss_get_fw_files_for_target(struct cnss_fw_files *pfw_files,
 {
 	if (!pfw_files)
 		return -ENODEV;
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (get_hw_version_devid() == 3) {
+		strcpy(FW_FILES_QCA6174_FW_3_0.board_data, "bd30_a10.bin");
+	}
+#endif
 
 	switch (target_version) {
 	case AR6320_REV1_VERSION:
