@@ -532,8 +532,15 @@ static void qpnp_lpg_calc_period(enum time_level tm_lvl,
 			} else if (best_m >= 1 && (
 				chip->sub_type != QPNP_PWM_MODE_ONLY_SUB_TYPE &&
 				chip->sub_type != QPNP_LPG_S_CHAN_SUB_TYPE)) {
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+				if (supported_sizes == QPNP_PWM_SIZE_6_7_9_BIT) {
+					/* Let n=7 only when 7bit is supported */
+#endif
 				n += 1;
 				best_m -= 1;
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+				}
+#endif
 			}
 		}
 	}
