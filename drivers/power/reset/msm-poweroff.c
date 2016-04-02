@@ -115,12 +115,23 @@ static void set_dload_mode(int on)
 	if (ret)
 		pr_err("Failed to set secure DLOAD mode: %d\n", ret);
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (on)
+		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+#endif
+
 	dload_mode_enabled = on;
 }
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+int get_dload_mode(void)
+{
+	return download_mode;
+#else
 static bool get_dload_mode(void)
 {
 	return dload_mode_enabled;
+#endif
 }
 
 static void enable_emergency_dload_mode(void)
@@ -214,7 +225,9 @@ static void halt_spmi_pmic_arbiter(void)
 
 static void msm_restart_prepare(const char *cmd)
 {
+#ifndef CONFIG_MACH_XIAOMI_MSM8992
 	bool need_warm_reset = false;
+#endif
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 
@@ -227,6 +240,9 @@ static void msm_restart_prepare(const char *cmd)
 			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+#else
 	need_warm_reset = (get_dload_mode() ||
 				(cmd != NULL && cmd[0] != '\0'));
 
@@ -244,7 +260,13 @@ static void msm_restart_prepare(const char *cmd)
 			strcmp(cmd, "keys clear")))
 			need_warm_reset = true;
 	}
+#endif
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (in_panic) {
+		__raw_writel(0x77665508, restart_reason);
+	} else if (cmd != NULL) {
+#else
 	/* Hard reset the PMIC unless memory contents must be maintained. */
 	if (need_warm_reset) {
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
@@ -253,6 +275,7 @@ static void msm_restart_prepare(const char *cmd)
 	}
 
 	if (cmd != NULL) {
+#endif
 		if (!strncmp(cmd, "bootloader", 10)) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_BOOTLOADER);
@@ -265,6 +288,10 @@ static void msm_restart_prepare(const char *cmd)
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_RTC);
 			__raw_writel(0x77665503, restart_reason);
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+		} else if (!strcmp(cmd, "switch")) {
+			__raw_writel(0x77665504, restart_reason);
+#endif
 		} else if (!strcmp(cmd, "dm-verity device corrupted")) {
 			__raw_writel(0x77665508, restart_reason);
 		} else if (!strcmp(cmd, "dm-verity enforcing")) {
@@ -283,6 +310,10 @@ static void msm_restart_prepare(const char *cmd)
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	} else {
+		__raw_writel(0x77665501, restart_reason);
+#endif
 	}
 
 	flush_cache_all();
@@ -370,6 +401,9 @@ static void do_msm_poweroff(void)
 #ifdef CONFIG_MSM_DLOAD_MODE
 	set_dload_mode(0);
 #endif
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	__raw_writel(0x0, restart_reason);
+#endif
 	qpnp_pon_system_pwr_off(PON_POWER_OFF_SHUTDOWN);
 	/* Needed to bypass debug image on some chips */
 	if (!is_scm_armv8())
@@ -441,6 +475,10 @@ static int msm_restart_probe(struct platform_device *pdev)
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (mem)
 		tcsr_boot_misc_detect = mem->start;
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	__raw_writel(0x77665510, restart_reason);
+#endif
 
 	pm_power_off = do_msm_poweroff;
 	arm_pm_restart = do_msm_restart;
