@@ -393,6 +393,9 @@ struct wcd9xxx_mbhc {
 	bool impedance_detect;
 	/* impedance of hphl and hphr */
 	uint32_t zl, zr;
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	uint32_t impedance_offset;
+#endif
 
 	u32 rco_clk_rate;
 
