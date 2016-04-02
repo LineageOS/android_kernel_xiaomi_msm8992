@@ -2644,12 +2644,12 @@ static void *def_codec_mbhc_cal(void)
 	btn_high = wcd9xxx_mbhc_cal_btn_det_mp(btn_cfg,
 					       MBHC_BTN_DET_V_BTN_HIGH);
 #ifdef CONFIG_MACH_XIAOMI_MSM8992
-	btn_low[0] = -75;
-	btn_high[0] = 150;
-	btn_low[1] = 151;
-	btn_high[1] = 330;
-	btn_low[2] = 331;
-	btn_high[2] = 655;
+	btn_low[0] = -50;
+	btn_high[0] = 90;
+	btn_low[1] = 95;
+	btn_high[1] = 220;
+	btn_low[2] = 225;
+	btn_high[2] = 370;
 	btn_low[3] = 375;
 	btn_high[3] = 655;
 	btn_low[4] = 656;
