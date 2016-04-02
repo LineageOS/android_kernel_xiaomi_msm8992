@@ -992,6 +992,11 @@ static int pll_20nm_vco_relock(struct mdss_pll_resources *dsi_pll_res)
 	pll_20nm_config_bypass_cal(dsi_pll_res->pll_base);
 	pll_20nm_config_vco_start(dsi_pll_res->pll_base);
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	MDSS_PLL_REG_W(dsi_pll_res->pll_base, 0x374, 0x00);
+	MDSS_PLL_REG_W(dsi_pll_res->pll_base, 0x370, 0x7f);
+#endif
+
 	if (!pll_20nm_is_pll_locked(dsi_pll_res)) {
 		pr_err("DSI PLL re-lock failed\n");
 		rc = -EINVAL;
@@ -1006,6 +1011,11 @@ static int pll_20nm_vco_init_lock(struct mdss_pll_resources *dsi_pll_res)
 
 	pll_20nm_config_resetsm(dsi_pll_res->pll_base);
 	pll_20nm_config_vco_start(dsi_pll_res->pll_base);
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	MDSS_PLL_REG_W(dsi_pll_res->pll_base, 0x374, 0x00);
+	MDSS_PLL_REG_W(dsi_pll_res->pll_base, 0x370, 0x7f);
+#endif
 
 	if (!pll_20nm_is_pll_locked(dsi_pll_res)) {
 		pr_err("DSI PLL init lock failed\n");
