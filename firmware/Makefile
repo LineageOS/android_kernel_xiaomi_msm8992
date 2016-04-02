@@ -148,6 +148,7 @@ fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_XIAOMI) += synaptics_jdi_incell_hw
 	synaptics_biel_sharp_update.fw \
 	synaptics_biel_lgd_update.fw \
 	synaptics_biel_auo_update.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_CYTTSP_BUTTON) += cyttsp_button_no_shielding.fw
 
 fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
 
