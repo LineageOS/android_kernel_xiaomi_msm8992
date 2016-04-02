@@ -2612,7 +2612,9 @@ restore:
 static void led_blink(struct qpnp_led_data *led,
 			struct pwm_config_data *pwm_cfg)
 {
+#ifndef CONFIG_MACH_XIAOMI_MSM8992
 	int rc;
+#endif
 
 	flush_work(&led->work);
 	mutex_lock(&led->lock);
@@ -2635,6 +2637,16 @@ static void led_blink(struct qpnp_led_data *led,
 		}
 		pwm_free(pwm_cfg->pwm_dev);
 		qpnp_pwm_init(pwm_cfg, led->spmi_dev, led->cdev.name);
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+		mutex_unlock(&led->lock);
+		if (led->in_order_command_processing)
+			queue_work(led->workqueue, &led->work);
+		else
+			schedule_work(&led->work);
+	} else {
+		mutex_unlock(&led->lock);
+	}
+#else
 		if (led->id == QPNP_ID_RGB_RED || led->id == QPNP_ID_RGB_GREEN
 				|| led->id == QPNP_ID_RGB_BLUE) {
 			rc = qpnp_rgb_set(led);
@@ -2654,8 +2666,12 @@ static void led_blink(struct qpnp_led_data *led,
 		}
 	}
 	mutex_unlock(&led->lock);
+#endif
 }
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+static unsigned int s_blink;
+#endif
 static ssize_t blink_store(struct device *dev,
 	struct device_attribute *attr,
 	const char *buf, size_t count)
@@ -2670,6 +2686,9 @@ static ssize_t blink_store(struct device *dev,
 		return ret;
 	led = container_of(led_cdev, struct qpnp_led_data, cdev);
 	led->cdev.brightness = blinking ? led->cdev.max_brightness : 0;
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	s_blink = blinking;
+#endif
 
 	switch (led->id) {
 	case QPNP_ID_LED_MPP:
@@ -2690,6 +2709,14 @@ static ssize_t blink_store(struct device *dev,
 	return count;
 }
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+static ssize_t blink_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, 50, "%u\n", s_blink);
+}
+#endif
+
 static DEVICE_ATTR(led_mode, 0664, NULL, led_mode_store);
 static DEVICE_ATTR(strobe, 0664, NULL, led_strobe_type_store);
 static DEVICE_ATTR(pwm_us, 0664, NULL, pwm_us_store);
@@ -2699,7 +2726,11 @@ static DEVICE_ATTR(start_idx, 0664, NULL, start_idx_store);
 static DEVICE_ATTR(ramp_step_ms, 0664, NULL, ramp_step_ms_store);
 static DEVICE_ATTR(lut_flags, 0664, NULL, lut_flags_store);
 static DEVICE_ATTR(duty_pcts, 0664, NULL, duty_pcts_store);
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+static DEVICE_ATTR(blink, 0664, blink_show, blink_store);
+#else
 static DEVICE_ATTR(blink, 0664, NULL, blink_store);
+#endif
 
 static struct attribute *led_attrs[] = {
 	&dev_attr_led_mode.attr,
