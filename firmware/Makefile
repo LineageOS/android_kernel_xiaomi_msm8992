@@ -136,6 +136,12 @@ fw-shipped-$(CONFIG_USB_VICAM) += vicam/firmware.fw
 fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
 fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
 fw-shipped-$(CONFIG_TOUCHSCREEN_FT5X46) += ft5346_lens.fw ft5346_biel.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_ATMEL_MXT_XIAOMI) += mxt_336t_biel_config.fw \
+	mxt_336t_tpk_config.fw \
+	mxt_640t_config.fw \
+	mxt_874u_tpk_config.fw \
+	mxt_336u_ofilm_config.fw \
+	mXT336T21AA.fw mxT640T15AA.fw mXT874U10EC.fw mXT336U10AA.fw
 
 fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
 
