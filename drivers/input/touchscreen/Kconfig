@@ -11,6 +11,8 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
+source "drivers/input/touchscreen/synaptics_dsx_xiaomi/Kconfig"
+
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
 
 config TOUCHSCREEN_88PM860X
@@ -1041,7 +1043,7 @@ config SECURE_TOUCH
 	bool "Secure Touch"
 	depends on (TOUCHSCREEN_ATMEL_MXT || TOUCHSCREEN_SYNAPTICS_I2C_RMI4 || \
 	  TOUCHSCREEN_SYNAPTICS_DSX_I2C_v21 || TOUCHSCREEN_ATMEL_MAXTOUCH_TS || \
-	  TOUCHSCREEN_ATMEL_MXT_XIAOMI)
+	  TOUCHSCREEN_ATMEL_MXT_XIAOMI || TOUCHSCREEN_SYNAPTICS_DSX_I2C_XIAOMI)
 	help
 	  Say Y here to enable Secure Touch in supported drivers.
 
