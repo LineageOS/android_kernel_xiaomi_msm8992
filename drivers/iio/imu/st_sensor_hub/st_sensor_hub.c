@@ -75,7 +75,7 @@ static const u8 lsm6db0_fw[] = {
 DECLARE_BUILTIN_FIRMWARE(ST_HUB_FIRMWARE_NAME, lsm6db0_fw);
 
 static const u8 lsm6db0_fw_a[] = {
-#include "lsm6db0.fw.a"
+#include "lsm6db0_a.fw"
 };
 
 DECLARE_BUILTIN_FIRMWARE(ST_HUB_FIRMWARE_NAME_A, lsm6db0_fw_a);
