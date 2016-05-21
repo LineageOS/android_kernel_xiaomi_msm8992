@@ -36,6 +36,8 @@
 #include <linux/notifier.h>
 #include <linux/fb.h>
 #endif
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 #define FT5X46_DEBUG_PERMISSION
 #define FT5X46_APK_DEBUG_CHANNEL
@@ -271,6 +273,9 @@ struct ft5x46_data {
 };
 
 struct ft5x46_data *ft_data;
+
+struct proc_dir_entry *ft5x46_proc_parent;
+struct proc_dir_entry *ft5x46_wakeup_mode_proc_entry;
 
 static int ft5x46_recv_byte(struct ft5x46_data *ft5x46, u8 len, ...)
 {
@@ -2475,6 +2480,83 @@ int ft5x46_pm_resume(struct device *dev)
 EXPORT_SYMBOL_GPL(ft5x46_pm_resume);
 #endif
 
+static int ft5x46_wakeup_mode_show_proc(struct seq_file *m, void *v)
+{
+	struct ft5x46_data *ft5x46;
+
+	if (ft_data)
+		ft5x46 = ft_data;
+	else
+		return -ENOMEM;
+
+	return seq_printf(m, "%d\n", (int)ft5x46->wakeup_mode);
+}
+
+static int ft5x46_wakeup_mode_open_proc(struct inode *inode, struct file *file)
+{
+	return single_open(file, ft5x46_wakeup_mode_show_proc, inode->i_private);
+}
+
+static ssize_t ft5x46_wakeup_mode_write_proc(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+{
+	int error;
+	unsigned long val;
+	struct ft5x46_data *ft5x46;
+
+	if (ft_data)
+		ft5x46 = ft_data;
+	else
+		return -ENOMEM;
+
+	error = strict_strtoul(buf, 0, &val);
+
+	if (!error)
+		ft5x46->wakeup_mode = !!val;
+
+	if (ft5x46->in_suspend)
+		ft5x46_wakeup_reconfigure(ft5x46, (bool)val);
+
+	return error ? : count;
+}
+
+static const struct file_operations ft5x46_wakeup_mode_proc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= ft5x46_wakeup_mode_open_proc,
+	.read		= seq_read,
+	.write		= ft5x46_wakeup_mode_write_proc,
+	.release	= single_release,
+};
+
+static int ft5x46_init_proc(void)
+{
+	ft5x46_proc_parent = proc_mkdir("touchscreen", NULL);
+	if (!ft5x46_proc_parent) {
+		printk(KERN_ERR "%s: Unable to create touchscreen proc entry\n", __func__);
+		return -ENOMEM;
+	}
+
+	ft5x46_wakeup_mode_proc_entry = proc_create("double_tap_enable", 0664,
+									ft5x46_proc_parent, &ft5x46_wakeup_mode_proc_fops);
+	if (!ft5x46_wakeup_mode_proc_entry) {
+		printk(KERN_ERR "%s: Unable to create double_tap_enable proc entry\n", __func__);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static int ft5x46_remove_proc(void)
+{
+	if (ft5x46_proc_parent) {
+		if (ft5x46_wakeup_mode_proc_entry)
+			remove_proc_entry("double_tap_enable", ft5x46_proc_parent);
+		remove_proc_entry("touchscreen", NULL);
+	}
+
+	return 0;
+}
+
 struct ft5x46_data *ft5x46_probe(struct device *dev,
 				const struct ft5x46_bus_ops *bops)
 {
@@ -2688,6 +2770,9 @@ struct ft5x46_data *ft5x46_probe(struct device *dev,
 		goto err_free_irq;
 	}
 
+	/* Ketut P. Kumajaya: Initialize procfs for user space access */
+	ft5x46_init_proc();
+
 	error = ft5x46_configure_sleep(ft5x46, true);
 	if (error) {
 		dev_err(dev, "Failed to configure sleep\n");
@@ -2763,6 +2848,8 @@ void ft5x46_remove(struct ft5x46_data *ft5x46)
 #ifdef FT5X46_APK_DEBUG_CHANNEL
 	ft5x46_release_apk_debug_channel(ft5x46);
 #endif
+	/* Ketut P. Kumajaya: De-initialize procfs */
+	ft5x46_remove_proc();
 	sysfs_remove_group(&ft5x46->dev->kobj, &ft5x46_attr_group);
 	free_irq(ft5x46->irq, ft5x46);
 	kfree(ft5x46->input->phys);
