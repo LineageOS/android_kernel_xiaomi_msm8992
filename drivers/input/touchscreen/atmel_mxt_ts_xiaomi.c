@@ -32,6 +32,8 @@
 #include <linux/notifier.h>
 #include <linux/fb.h>
 #endif
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 /* Version */
 #define MXT_VER_20		20
@@ -751,6 +753,11 @@ struct mxt_data {
 	struct notifier_block fb_notif;
 #endif
 };
+
+struct mxt_data *mx_data;
+
+struct proc_dir_entry *mxt_proc_parent;
+struct proc_dir_entry *mxt_wakeup_mode_proc_entry;
 
 static struct mxt_suspend mxt_save[] = {
 	{MXT_GEN_POWER_T7, MXT_POWER_IDLEACQINT,
@@ -6203,6 +6210,103 @@ static int mxt_parse_dt(struct device *dev, struct mxt_platform_data *pdata)
 }
 #endif
 
+static int mxt_wakeup_mode_show_proc(struct seq_file *m, void *v)
+{
+	if (mx_data)
+		return seq_printf(m, "%d\n", (int)mx_data->wakeup_gesture_mode);
+	else
+		return -ENOMEM;
+}
+
+static int mxt_wakeup_mode_open_proc(struct inode *inode, struct file *file)
+{
+	return single_open(file, mxt_wakeup_mode_show_proc, inode->i_private);
+}
+
+static ssize_t mxt_wakeup_mode_write_proc(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+{
+	const struct mxt_platform_data *pdata;
+	int index;
+	unsigned long val;
+	int error;
+
+	if (mx_data) {
+		pdata = mx_data->pdata;
+		index = mx_data->current_index;
+	} else {
+		return -ENOMEM;
+	}
+
+	if (pdata->config_array[index].wake_up_self_adcx == 0)
+		return count;
+
+	if (pdata->cut_off_power) {
+		dev_err(&mx_data->client->dev, "Wakeup gesture not supported\n");
+		return count;
+	}
+
+	error = strict_strtoul(buf, 0, &val);
+
+	if (!error)
+		mx_data->wakeup_gesture_mode = (u8)val;
+
+	if (mx_data->is_stopped) {
+		/* Set wakeup gesture mode in deepsleep,
+		 * should re-set the registers */
+		if (mx_data->wakeup_gesture_mode) {
+			mxt_enable_irq(mx_data);
+			if (mx_data->input_dev->users)
+				mxt_stop(mx_data);
+		} else {
+			mxt_disable_irq(mx_data);
+			mx_data->is_wakeup_by_gesture = false;
+			mxt_set_gesture_wake_up(mx_data, false);
+			mxt_enable_gesture_mode(mx_data, false);
+			mxt_set_power_cfg(mx_data, MXT_POWER_CFG_DEEPSLEEP);
+		}
+	}
+
+	return error ? : count;
+}
+
+static const struct file_operations mxt_wakeup_mode_proc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= mxt_wakeup_mode_open_proc,
+	.read		= seq_read,
+	.write		= mxt_wakeup_mode_write_proc,
+	.release	= single_release,
+};
+
+static int mxt_init_proc(void)
+{
+	mxt_proc_parent = proc_mkdir("touchscreen", NULL);
+	if (!mxt_proc_parent) {
+		printk(KERN_ERR "%s: Unable to create touchscreen proc entry\n", __func__);
+		return -ENOMEM;
+	}
+
+	mxt_wakeup_mode_proc_entry = proc_create("double_tap_enable", 0664,
+									mxt_proc_parent, &mxt_wakeup_mode_proc_fops);
+	if (!mxt_wakeup_mode_proc_entry) {
+		printk(KERN_ERR "%s: Unable to create double_tap_enable proc entry\n", __func__);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static int mxt_remove_proc(void)
+{
+	if (mxt_proc_parent) {
+		if (mxt_wakeup_mode_proc_entry)
+			remove_proc_entry("double_tap_enable", mxt_proc_parent);
+		remove_proc_entry("touchscreen", NULL);
+	}
+
+	return 0;
+}
+
 static int mxt_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
@@ -6233,6 +6337,7 @@ static int mxt_probe(struct i2c_client *client,
 		return -ENOMEM;
 	}
 
+	mx_data = data;
 	data->state = INIT;
 
 	data->client = client;
@@ -6398,6 +6503,8 @@ static int mxt_probe(struct i2c_client *client,
 		goto err_remove_self_ref_attr;
 	}
 
+	/* Ketut P. Kumajaya: Initialize procfs for user space access */
+	mxt_init_proc();
 	mxt_debugfs_init(data);
 	schedule_work(&data->hover_loading_work);
 
@@ -6448,6 +6555,8 @@ static int mxt_remove(struct i2c_client *client)
 #endif
 	cancel_delayed_work(&data->calibration_delayed_work);
 	cancel_delayed_work(&data->resume_delayed_work);
+	/* Ketut P. Kumajaya: De-initialize procfs */
+	mxt_remove_proc();
 	sysfs_remove_bin_file(&client->dev.kobj, &data->mutual_ref_attr);
 	sysfs_remove_bin_file(&client->dev.kobj, &data->self_ref_attr);
 	sysfs_remove_bin_file(&client->dev.kobj, &data->mem_access_attr);
