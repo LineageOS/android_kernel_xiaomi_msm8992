@@ -633,6 +633,7 @@ static struct synaptics_rmi4_exp_fn_data exp_data;
 struct proc_dir_entry *rmi4_proc_parent;
 struct proc_dir_entry *rmi4_0dbutton_proc_entry;
 struct proc_dir_entry *rmi4_wake_gesture_proc_entry;
+struct proc_dir_entry *rmi4_edge_mode_proc_entry;
 
 struct synaptics_dsx_button_map *vir_button_map;
 
@@ -3976,6 +3977,50 @@ static ssize_t synaptics_rmi4_wake_gesture_write_proc(struct file *file,
 	return count;
 }
 
+static int synaptics_rmi4_edge_mode_show_proc(struct seq_file *m, void *v)
+{
+	struct synaptics_rmi4_data *rmi4_data;
+
+	if (exp_data.rmi4_data)
+		rmi4_data = exp_data.rmi4_data;
+	else
+		return -ENOMEM;
+
+	return seq_printf(m, "%u\n", rmi4_data->edge_mode);
+}
+
+static int synaptics_rmi4_edge_mode_open_proc(struct inode *inode, struct file *file)
+{
+	return single_open(file, synaptics_rmi4_edge_mode_show_proc, inode->i_private);
+}
+
+static ssize_t synaptics_rmi4_edge_mode_write_proc(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+{
+	unsigned int input;
+	struct synaptics_rmi4_data *rmi4_data;
+
+	if (exp_data.rmi4_data)
+		rmi4_data = exp_data.rmi4_data;
+	else
+		return -ENOMEM;
+
+	if (sscanf(buf, "%u", &input) != 1)
+		return -EINVAL;
+
+	if (input < EDGE_DISABLE || input > EDGE_FINGER_HANDGRIP)
+		return count;
+
+	if (synaptics_rmi4_enable_edge_touch(rmi4_data, input) < 0) {
+		dev_err(rmi4_data->pdev->dev.parent,
+			"Unable to switch edge touch mode\n");
+	} else {
+		rmi4_data->edge_mode = input;
+	}
+
+	return count;
+}
+
 static const struct file_operations rmi4_0dbutton_proc_fops = {
 	.owner		= THIS_MODULE,
 	.open		= synaptics_rmi4_0dbutton_open_proc,
@@ -3989,6 +4034,14 @@ static const struct file_operations rmi4_wake_gesture_proc_fops = {
 	.open		= synaptics_rmi4_wake_gesture_open_proc,
 	.read		= seq_read,
 	.write		= synaptics_rmi4_wake_gesture_write_proc,
+	.release	= single_release,
+};
+
+static const struct file_operations rmi4_edge_mode_proc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= synaptics_rmi4_edge_mode_open_proc,
+	.read		= seq_read,
+	.write		= synaptics_rmi4_edge_mode_write_proc,
 	.release	= single_release,
 };
 
@@ -4014,6 +4067,13 @@ static int synaptics_rmi4_init_proc(void)
 		return -ENOMEM;
 	}
 
+	rmi4_edge_mode_proc_entry = proc_create("edge_touch_mode", 0664,
+									rmi4_proc_parent, &rmi4_edge_mode_proc_fops);
+	if (!rmi4_edge_mode_proc_entry) {
+		printk(KERN_ERR "%s: Unable to create edge_touch_mode proc entry\n", __func__);
+		return -ENOMEM;
+	}
+
 	return 0;
 }
 
@@ -4024,6 +4084,8 @@ static int synaptics_rmi4_remove_proc(void)
 			remove_proc_entry("nav_button_enable", rmi4_proc_parent);
 		if (rmi4_wake_gesture_proc_entry)
 			remove_proc_entry("double_tap_enable", rmi4_proc_parent);
+		if (rmi4_edge_mode_proc_entry)
+			remove_proc_entry("edge_touch_mode", rmi4_proc_parent);
 		remove_proc_entry("touchscreen", NULL);
 	}
 
