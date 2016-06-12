@@ -756,8 +756,11 @@ struct mxt_data {
 
 struct mxt_data *mx_data;
 
+static unsigned int nav_button_enable;
+
 struct proc_dir_entry *mxt_proc_parent;
 struct proc_dir_entry *mxt_wakeup_mode_proc_entry;
+struct proc_dir_entry *mxt_nav_button_proc_entry;
 
 static struct mxt_suspend mxt_save[] = {
 	{MXT_GEN_POWER_T7, MXT_POWER_IDLEACQINT,
@@ -1573,6 +1576,9 @@ static void mxt_proc_t15_messages(struct mxt_data *data, u8 *msg)
 	unsigned long keystates = le32_to_cpu(msg[2]);
 	int index = data->current_index;
 
+	if (!nav_button_enable)
+		return;
+
 	if (!input_dev)
 		return;
 
@@ -1781,6 +1787,9 @@ static void mxt_proc_t97_messages(struct mxt_data *data, u8 *msg)
 	bool curr_state, new_state;
 	bool sync = false;
 	unsigned long keystates = le32_to_cpu(msg[2]);
+
+	if (!nav_button_enable)
+		return;
 
 	if (!input_dev)
 		return;
@@ -5663,6 +5672,7 @@ static int mxt_initialize_input_device(struct mxt_data *data)
 	}
 
 	data->input_dev = input_dev;
+	nav_button_enable = 1;
 
 	return 0;
 }
@@ -6270,11 +6280,42 @@ static ssize_t mxt_wakeup_mode_write_proc(struct file *file,
 	return error ? : count;
 }
 
+static int mxt_nav_button_show_proc(struct seq_file *m, void *v)
+{
+	return seq_printf(m, "%u\n", nav_button_enable);
+}
+
+static int mxt_nav_button_open_proc(struct inode *inode, struct file *file)
+{
+	return single_open(file, mxt_nav_button_show_proc, inode->i_private);
+}
+
+static ssize_t mxt_nav_button_write_proc(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+{
+	unsigned int val;
+
+	if (sscanf(buf, "%u", &val) != 1)
+		return -EINVAL;
+
+	nav_button_enable = val > 0 ? 1 : 0;
+
+	return count;
+}
+
 static const struct file_operations mxt_wakeup_mode_proc_fops = {
 	.owner		= THIS_MODULE,
 	.open		= mxt_wakeup_mode_open_proc,
 	.read		= seq_read,
 	.write		= mxt_wakeup_mode_write_proc,
+	.release	= single_release,
+};
+
+static const struct file_operations mxt_nav_button_proc_fops = {
+	.owner		= THIS_MODULE,
+	.open		= mxt_nav_button_open_proc,
+	.read		= seq_read,
+	.write		= mxt_nav_button_write_proc,
 	.release	= single_release,
 };
 
@@ -6293,6 +6334,13 @@ static int mxt_init_proc(void)
 		return -ENOMEM;
 	}
 
+	mxt_nav_button_proc_entry = proc_create("nav_button_enable", 0664,
+									mxt_proc_parent, &mxt_nav_button_proc_fops);
+	if (!mxt_nav_button_proc_entry) {
+		printk(KERN_ERR "%s: Unable to create nav_button_enable proc entry\n", __func__);
+		return -ENOMEM;
+	}
+
 	return 0;
 }
 
@@ -6301,6 +6349,8 @@ static int mxt_remove_proc(void)
 	if (mxt_proc_parent) {
 		if (mxt_wakeup_mode_proc_entry)
 			remove_proc_entry("double_tap_enable", mxt_proc_parent);
+		if (mxt_nav_button_proc_entry)
+			remove_proc_entry("nav_button_enable", mxt_proc_parent);
 		remove_proc_entry("touchscreen", NULL);
 	}
 
