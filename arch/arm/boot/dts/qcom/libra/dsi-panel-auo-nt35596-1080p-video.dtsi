@@ -43,7 +43,7 @@
 		qcom,mdss-dsi-underflow-color = <0xff>;
 		qcom,mdss-dsi-border-color = <0>;
 		qcom,mdss-dsi-pixel-packing = "tight";
-		qcom,mdss-dsi-pan-enable-dynamic-fps;
+		/* qcom,mdss-dsi-pan-enable-dynamic-fps; */
 		qcom,mdss-dsi-pan-fps-update = "dfps_immediate_porch_mode_vfp";
 		qcom,mdss-dsi-min-refresh-rate = <45>;
 		qcom,mdss-dsi-max-refresh-rate = <60>;
