@@ -75,8 +75,9 @@ struct fpc1020_data {
 	int event_code;
 	struct mutex lock;
 	bool prepared;
-	int  wakeup_enabled;
+	bool wakeup_enabled;
 	struct wake_lock	ttw_wl;
+	bool clocks_enabled;
 };
 
 /**
@@ -144,7 +145,10 @@ static int set_pipe_ownership(struct fpc1020_data *fpc1020, bool to_tz)
 
 static int set_clks(struct fpc1020_data *fpc1020, bool enable)
 {
-	int rc;
+	int rc = 0;
+
+	if (enable == fpc1020->clocks_enabled)
+		return rc;
 
 	if (enable) {
 		rc = clk_set_rate(fpc1020->core_clk,
@@ -173,10 +177,11 @@ static int set_clks(struct fpc1020_data *fpc1020, bool enable)
 		}
 		dev_dbg(fpc1020->dev, "%s ok. clk rate %u hz\n", __func__,
 				fpc1020->spi->max_speed_hz);
+		fpc1020->clocks_enabled = true;
 	} else {
 		clk_disable_unprepare(fpc1020->iface_clk);
 		clk_disable_unprepare(fpc1020->core_clk);
-		rc = 0;
+		fpc1020->clocks_enabled = false;
 	}
 	return rc;
 }
@@ -279,6 +284,14 @@ static ssize_t fabric_vote_set(struct device *dev,
 }
 static DEVICE_ATTR(fabric_vote, S_IWUSR, NULL, fabric_vote_set);
 
+/* Just a dummy regulator sysfs, always return success */
+static ssize_t regulator_enable_set(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	return count;
+}
+static DEVICE_ATTR(regulator_enable, S_IWUSR, NULL, regulator_enable_set);
+
 static ssize_t spi_bus_lock_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -348,7 +361,7 @@ static DEVICE_ATTR(hw_reset, S_IWUSR, NULL, hw_reset_set);
  */
 static int device_prepare(struct  fpc1020_data *fpc1020, bool enable)
 {
-	int rc;
+	int rc = 0;
 
 	mutex_lock(&fpc1020->lock);
 	if (enable && !fpc1020->prepared) {
@@ -376,7 +389,6 @@ static int device_prepare(struct  fpc1020_data *fpc1020, bool enable)
 			goto exit_5;
 #endif
 	} else if (!enable && fpc1020->prepared) {
-		rc = 0;
 #ifdef SET_PIPE_OWNERSHIP
 		(void)set_pipe_ownership(fpc1020, false);
 exit_5:
@@ -390,8 +402,6 @@ exit_3:
 
 		fpc1020->prepared = false;
 		spi_bus_unlock(fpc1020->spi->master);
-	} else {
-		rc = 0;
 	}
 	mutex_unlock(&fpc1020->lock);
 	return rc;
@@ -413,14 +423,66 @@ static ssize_t spi_prepare_set(struct device *dev,
 }
 static DEVICE_ATTR(spi_prepare, S_IWUSR, NULL, spi_prepare_set);
 
+/*
+ * sysfs node for controlling whether the driver is allowed
+ * to wake up the platform on interrupt.
+ */
+static ssize_t wakeup_enable_set(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
+
+	if (!strncmp(buf, "enable", strlen("enable"))) {
+		fpc1020->wakeup_enabled = true;
+		smp_wmb();
+	} else if (!strncmp(buf, "disable", strlen("disable"))) {
+		fpc1020->wakeup_enabled = false;
+		smp_wmb();
+	} else {
+		return -EINVAL;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(wakeup_enable, S_IWUSR, NULL, wakeup_enable_set);
+
+/**
+ * sysf node to check the interrupt status of the sensor, the interrupt
+ * handler should perform sysf_notify to allow userland to poll the node.
+ */
+static ssize_t irq_get(struct device* device,
+	struct device_attribute* attribute, char* buffer)
+{
+	struct fpc1020_data* fpc1020 = dev_get_drvdata(device);
+	int irq = gpio_get_value(fpc1020->irq_gpio);
+	return scnprintf(buffer, PAGE_SIZE, "%i\n", irq);
+}
+
+/**
+ * writing to the irq node will just drop a printk message
+ * and return success, used for latency measurement.
+ */
+static ssize_t irq_ack(struct device* device,
+	struct device_attribute* attribute, const char* buffer, size_t count)
+{
+	struct fpc1020_data* fpc1020 = dev_get_drvdata(device);
+	dev_dbg(fpc1020->dev, "%s\n", __func__);
+	return count;
+}
+
+static DEVICE_ATTR(irq, S_IRUSR | S_IWUSR, irq_get, irq_ack);
+
 static struct attribute *attributes[] = {
 	&dev_attr_pinctl_set.attr,
 	&dev_attr_clk_enable.attr,
 	&dev_attr_spi_owner.attr,
 	&dev_attr_spi_prepare.attr,
 	&dev_attr_fabric_vote.attr,
+	&dev_attr_regulator_enable.attr,
 	&dev_attr_bus_lock.attr,
 	&dev_attr_hw_reset.attr,
+	&dev_attr_wakeup_enable.attr,
+	&dev_attr_irq.attr,
 	NULL
 };
 
@@ -444,6 +506,7 @@ static irqreturn_t fpc1020_irq_handler(int irq, void *handle)
 	input_event(fpc1020->idev, EV_MSC, MSC_SCAN, ++fpc1020->irq_num);
 	input_sync(fpc1020->idev);
 	dev_dbg(fpc1020->dev, "%s %d\n", __func__, fpc1020->irq_num);
+	sysfs_notify(&fpc1020->dev->kobj, NULL, dev_attr_irq.attr.name);
 	return IRQ_HANDLED;
 }
 
@@ -497,7 +560,8 @@ static int fpc1020_probe(struct spi_device *spi)
 		goto exit;
 	}
 
-	fpc1020->wakeup_enabled = 0;
+	fpc1020->wakeup_enabled = false;
+	fpc1020->clocks_enabled = false;
 
 	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_irq",
 			&fpc1020->irq_gpio);
@@ -600,7 +664,7 @@ static int fpc1020_probe(struct spi_device *spi)
 	if (of_property_read_bool(dev->of_node, "fpc,enable-wakeup")) {
 		irqf |= IRQF_NO_SUSPEND;
 		device_init_wakeup(dev, 1);
-		fpc1020->wakeup_enabled = 1;
+		fpc1020->wakeup_enabled = true;
 		enable_irq_wake(gpio_to_irq(fpc1020->irq_gpio));
 		pr_info("%s enable-wakeup\n", __func__);
 	}
@@ -637,6 +701,7 @@ static int fpc1020_remove(struct spi_device *spi)
 
 	sysfs_remove_group(&spi->dev.kobj, &attribute_group);
 	mutex_destroy(&fpc1020->lock);
+	wake_lock_destroy(&fpc1020->ttw_wl);
 	dev_info(&spi->dev, "%s\n", __func__);
 	return 0;
 }
