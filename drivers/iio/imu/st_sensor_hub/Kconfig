@@ -59,6 +59,13 @@ config IIO_ST_HUB_DISABLE_ALL_SENSORS_ON_SUSPEND
 
 	  If this feature is enabled, all sensors are disabled during suspend.
 
+config IIO_ST_HUB_ENABLE_WAKE_LOCK_SENSORS
+	bool "Enable wake lock sensors"
+	help
+	  Say yes here to enable wake lock sensors.
+
+	  If this feature is enabled, all wake lock sensors are enabled.
+
 config IIO_ST_HUB_BUILTIN_FIRMWARE
 	depends on IIO_ST_HUB_RAM_LOADER
 	bool "Use built-in firmware"

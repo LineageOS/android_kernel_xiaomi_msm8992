@@ -216,8 +216,10 @@ static int st_hub_step_detector_remove(struct platform_device *pdev)
 static struct platform_device_id st_hub_step_detector_ids[] = {
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "step_d") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "step_d") },
+#ifdef CONFIG_IIO_ST_HUB_ENABLE_WAKE_LOCK_SENSORS
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "step_d_wk") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "step_d_wk") },
+#endif
 	{},
 };
 MODULE_DEVICE_TABLE(platform, st_hub_step_detector_ids);

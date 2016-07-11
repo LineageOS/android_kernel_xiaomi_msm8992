@@ -240,8 +240,10 @@ static int st_hub_euler_remove(struct platform_device *pdev)
 static struct platform_device_id st_hub_euler_ids[] = {
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "euler") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "euler") },
+#ifdef CONFIG_IIO_ST_HUB_ENABLE_WAKE_LOCK_SENSORS
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "euler_wk") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "euler_wk") },
+#endif
 	{},
 };
 MODULE_DEVICE_TABLE(platform, st_hub_euler_ids);

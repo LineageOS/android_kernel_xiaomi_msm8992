@@ -247,12 +247,14 @@ static struct platform_device_id st_hub_quat_ids[] = {
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "game_quat") },
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "geo_quat") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "geo_quat") },
+#ifdef CONFIG_IIO_ST_HUB_ENABLE_WAKE_LOCK_SENSORS
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "quat_wk") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "quat_wk") },
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "game_q_wk") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "game_quat_wk") },
 	{ CONCATENATE_STRING(LIS331EB_DEV_NAME, "geo_q_wk") },
 	{ CONCATENATE_STRING(LSM6DB0_DEV_NAME, "geo_quat_wk") },
+#endif
 	{},
 };
 MODULE_DEVICE_TABLE(platform, st_hub_quat_ids);
