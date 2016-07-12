@@ -752,6 +752,7 @@ struct mxt_data {
 #ifdef CONFIG_FB
 	struct notifier_block fb_notif;
 #endif
+	ktime_t timestamp;
 };
 
 struct mxt_data *mx_data;
@@ -1356,6 +1357,11 @@ static void mxt_proc_t9_messages(struct mxt_data *data, u8 *message)
 		(status & MXT_T9_UNGRIP) ? 'U' : '.',
 		x, y, area, amplitude, vector);
 
+	input_event(input_dev, EV_SYN, SYN_TIME_SEC,
+			ktime_to_timespec(data->timestamp).tv_sec);
+	input_event(input_dev, EV_SYN, SYN_TIME_NSEC,
+			ktime_to_timespec(data->timestamp).tv_nsec);
+
 	input_mt_slot(input_dev, id);
 
 	if ((status & MXT_T9_DETECT) && (status & MXT_T9_RELEASE)) {
@@ -1447,6 +1453,11 @@ static void mxt_proc_t100_messages(struct mxt_data *data, u8 *message)
 			id, data->num_touchids);
 		return;
 	}
+
+	input_event(input_dev, EV_SYN, SYN_TIME_SEC,
+			ktime_to_timespec(data->timestamp).tv_sec);
+	input_event(input_dev, EV_SYN, SYN_TIME_NSEC,
+			ktime_to_timespec(data->timestamp).tv_nsec);
 
 	if (id == 0) {
 		status = message[1];
@@ -1687,6 +1698,11 @@ static void mxt_proc_t63_messages(struct mxt_data *data, u8 *msg)
 		(msg[2] & MXT_STYLUS_ERASER) ? 'E' : '.',
 		(msg[2] & MXT_STYLUS_TIP)    ? 'T' : '.',
 		(msg[2] & MXT_STYLUS_DETECT) ? 'D' : '.');
+
+	input_event(input_dev, EV_SYN, SYN_TIME_SEC,
+			ktime_to_timespec(data->timestamp).tv_sec);
+	input_event(input_dev, EV_SYN, SYN_TIME_NSEC,
+			ktime_to_timespec(data->timestamp).tv_nsec);
 
 	input_mt_slot(input_dev, id);
 
@@ -2069,6 +2085,8 @@ update_count:
 static irqreturn_t mxt_interrupt(int irq, void *dev_id)
 {
 	struct mxt_data *data = dev_id;
+
+	data->timestamp = ktime_get();
 
 	if (data->T44_address)
 		return mxt_read_messages_t44(data);
