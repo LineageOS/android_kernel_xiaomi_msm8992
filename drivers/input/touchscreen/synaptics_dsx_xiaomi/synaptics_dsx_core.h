@@ -369,6 +369,7 @@ struct synaptics_rmi4_data {
 	struct pinctrl *ts_pinctrl;
 	struct pinctrl_state *pinctrl_state_active;
 	struct pinctrl_state *pinctrl_state_suspend;
+	ktime_t timestamp;
 };
 
 struct synaptics_dsx_bus_access {
