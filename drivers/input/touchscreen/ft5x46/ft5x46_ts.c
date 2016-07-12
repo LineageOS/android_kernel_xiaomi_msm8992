@@ -270,6 +270,7 @@ struct ft5x46_data {
 #ifdef CONFIG_FB
 	struct notifier_block fb_notif;
 #endif
+	ktime_t timestamp;
 };
 
 struct ft5x46_data *ft_data;
@@ -962,6 +963,11 @@ static void ft5x46_report_value(struct ft5x46_data *ft5x46)
 	int i;
 	int up_point = 0;
 
+	input_event(ft5x46->input, EV_SYN, SYN_TIME_SEC,
+			ktime_to_timespec(ft5x46->timestamp).tv_sec);
+	input_event(ft5x46->input, EV_SYN, SYN_TIME_NSEC,
+			ktime_to_timespec(ft5x46->timestamp).tv_nsec);
+
 	for (i = 0; i < event->touch_point; i++) {
 		input_mt_slot(ft5x46->input, event->finger_id[i]);
 
@@ -1051,6 +1057,8 @@ static irqreturn_t ft5x46_interrupt(int irq, void *dev_id)
 	u8 val;
 
 	mutex_lock(&ft5x46->mutex);
+
+	ft5x46->timestamp = ktime_get();
 
 	if (ft5x46->wakeup_mode && ft5x46->in_suspend) {
 		error = ft5x46_read_byte(ft5x46, 0xD0, &val);
