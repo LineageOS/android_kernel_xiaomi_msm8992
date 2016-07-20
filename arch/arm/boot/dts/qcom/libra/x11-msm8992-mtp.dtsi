@@ -418,6 +418,7 @@
 		atmel,use-ptc-key;
 		atmel,irqflags = <0x2008>;
 		atmel,gpio-mask = <0xC>;
+		atmel,resume-in-workqueue;
 		atmel,cfg_1 {
 			atmel,family-id = <0xA4>;
 			atmel,variant-id = <0x15>;
@@ -541,6 +542,7 @@
 		synaptics,use-charger-bit;
 		synaptics,tp-id-byte = /bits/ 8 <0 1>;
 		synaptics,config-array-size = <5>;
+		synaptics,resume-in-workqueue;
 		synaptics,cfg_1 {
 			synaptics,tp-id = /bits/ 8 <0x31 0x33>;
 			synaptics,fw-name = "synaptics_biel_sharp_update.fw";

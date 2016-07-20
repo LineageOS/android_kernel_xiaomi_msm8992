@@ -424,6 +424,7 @@
 		atmel,default-panel-id = <0x34>;
 		atmel,irqflags = <0x2008>;
 		atmel,gpio-mask = <0xC>;
+		atmel,resume-in-workqueue;
 		atmel,cfg_1 {
 			atmel,family-id = <0xA6>;
 			atmel,variant-id = <0x06>;
