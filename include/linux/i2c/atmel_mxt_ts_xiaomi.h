@@ -85,6 +85,7 @@ struct mxt_platform_data {
 	int default_panel_id;
 	bool use_ptc_key;
 	bool cut_off_power;
+	bool resume_in_workqueue;
 };
 
 int mxt_register_glove_mode_notifier(struct notifier_block *nb);

@@ -750,6 +750,7 @@ struct mxt_data {
 	struct pinctrl_state *gpio_state_suspend;
 
 #ifdef CONFIG_FB
+	struct work_struct fb_notify_work;
 	struct notifier_block fb_notif;
 #endif
 	ktime_t timestamp;
@@ -5827,6 +5828,19 @@ static int mxt_pinctrl_select(struct mxt_data *data, bool on)
 }
 
 #ifdef CONFIG_FB
+static void fb_notify_resume_work(struct work_struct *work)
+{
+	struct mxt_data *mxt_data =
+		container_of(work, struct mxt_data, fb_notify_work);
+
+	dev_dbg(&mxt_data->client->dev, "##### UNBLANK SCREEN #####\n");
+	mxt_input_enable(mxt_data->input_dev);
+#ifdef TOUCH_WAKEUP_EVENT_RECORD
+	if (atomic_read(&wakeup_flag) == 1)
+		wakeup_event_record_write(EVENT_SCREEN_ON);
+#endif
+}
+
 static int fb_notifier_cb(struct notifier_block *self,
 			unsigned long event, void *data)
 {
@@ -5835,24 +5849,44 @@ static int fb_notifier_cb(struct notifier_block *self,
 	struct mxt_data *mxt_data =
 		container_of(self, struct mxt_data, fb_notif);
 
-	if (evdata && evdata->data && event == FB_EVENT_BLANK && mxt_data) {
+	if (evdata && evdata->data && mxt_data) {
 		blank = evdata->data;
-		if (*blank == FB_BLANK_UNBLANK) {
-			dev_dbg(&mxt_data->client->dev, "##### UNBLANK SCREEN #####\n");
-			mxt_input_enable(mxt_data->input_dev);
+		if (mxt_data->pdata->resume_in_workqueue) {
+			if (event == FB_EARLY_EVENT_BLANK) {
+				if (*blank == FB_BLANK_UNBLANK)
+					schedule_work(&(mxt_data->fb_notify_work));
+			} else if (event == FB_EVENT_BLANK &&
+					*blank == FB_BLANK_POWERDOWN) {
+					flush_work(&(mxt_data->fb_notify_work));
+					dev_dbg(&mxt_data->client->dev, "##### BLANK SCREEN #####\n");
+					mxt_input_disable(mxt_data->input_dev);
 #ifdef TOUCH_WAKEUP_EVENT_RECORD
-				if (atomic_read(&wakeup_flag) == 1)
-					wakeup_event_record_write(EVENT_SCREEN_ON);
+					if (atomic_read(&wakeup_flag) == 1) {
+						wakeup_event_record_write(EVENT_SCREEN_OFF);
+						atomic_set(&wakeup_flag, 0);
+					}
 #endif
-		} else if (*blank == FB_BLANK_POWERDOWN) {
-			dev_dbg(&mxt_data->client->dev, "##### BLANK SCREEN #####\n");
-			mxt_input_disable(mxt_data->input_dev);
+			}
+		} else {
+			if (event == FB_EVENT_BLANK) {
+				if (*blank == FB_BLANK_UNBLANK) {
+					dev_dbg(&mxt_data->client->dev, "##### UNBLANK SCREEN #####\n");
+					mxt_input_enable(mxt_data->input_dev);
 #ifdef TOUCH_WAKEUP_EVENT_RECORD
-				if (atomic_read(&wakeup_flag) == 1) {
-					wakeup_event_record_write(EVENT_SCREEN_OFF);
-					atomic_set(&wakeup_flag, 0);
+						if (atomic_read(&wakeup_flag) == 1)
+							wakeup_event_record_write(EVENT_SCREEN_ON);
+#endif
+				} else if (*blank == FB_BLANK_POWERDOWN) {
+					dev_dbg(&mxt_data->client->dev, "##### BLANK SCREEN #####\n");
+					mxt_input_disable(mxt_data->input_dev);
+#ifdef TOUCH_WAKEUP_EVENT_RECORD
+						if (atomic_read(&wakeup_flag) == 1) {
+							wakeup_event_record_write(EVENT_SCREEN_OFF);
+							atomic_set(&wakeup_flag, 0);
+						}
+#endif
 				}
-#endif
+			}
 		}
 	}
 
@@ -5863,6 +5897,7 @@ static void configure_sleep(struct mxt_data *data)
 {
 	int ret;
 
+	INIT_WORK(&data->fb_notify_work, fb_notify_resume_work);
 	data->fb_notif.notifier_call = fb_notifier_cb;
 	ret = fb_register_client(&data->fb_notif);
 	if (ret) {
@@ -6058,6 +6093,8 @@ static int mxt_parse_dt(struct device *dev, struct mxt_platform_data *pdata)
 	pdata->cut_off_power = of_property_read_bool(np, "atmel,cut-off-power");
 
 	pdata->use_ptc_key = of_property_read_bool(np, "atmel,use-ptc-key");
+
+	pdata->resume_in_workqueue = of_property_read_bool(np, "atmel,resume-in-workqueue");
 
 	ret = of_property_read_u32(np, "atmel,gpio-mask", (u32 *)&temp_val);
 	if (ret)
