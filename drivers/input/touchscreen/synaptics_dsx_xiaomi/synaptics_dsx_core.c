@@ -208,6 +208,7 @@ static void synaptics_rmi4_wakeup_reconfigure(struct synaptics_rmi4_data *rmi4_d
 		bool enable);
 
 #ifdef CONFIG_FB
+static void fb_notify_resume_work(struct work_struct *work);
 static int synaptics_rmi4_fb_notifier_cb(struct notifier_block *self,
 		unsigned long event, void *data);
 #endif
@@ -4217,6 +4218,7 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 	}
 
 #ifdef CONFIG_FB
+	INIT_WORK(&rmi4_data->fb_notify_work, fb_notify_resume_work);
 	rmi4_data->fb_notifier.notifier_call = synaptics_rmi4_fb_notifier_cb;
 	retval = fb_register_client(&rmi4_data->fb_notifier);
 	if (retval < 0) {
@@ -4624,6 +4626,18 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 }
 
 #ifdef CONFIG_FB
+static void fb_notify_resume_work(struct work_struct *work)
+{
+	struct synaptics_rmi4_data *rmi4_data =
+		container_of(work, struct synaptics_rmi4_data, fb_notify_work);
+	synaptics_rmi4_resume(&(rmi4_data->pdev->dev));
+	rmi4_data->fb_ready = true;
+#ifdef TOUCH_WAKEUP_EVENT_RECORD
+	if (atomic_read(&wakeup_flag) == 1)
+		wakeup_event_record_write(EVENT_SCREEN_ON);
+#endif
+}
+
 static int synaptics_rmi4_fb_notifier_cb(struct notifier_block *self,
 		unsigned long event, void *data)
 {
@@ -4634,24 +4648,42 @@ static int synaptics_rmi4_fb_notifier_cb(struct notifier_block *self,
 			fb_notifier);
 
 	if (evdata && evdata->data && rmi4_data) {
-		if (event == FB_EVENT_BLANK) {
-			transition = evdata->data;
-			if (*transition == FB_BLANK_POWERDOWN) {
-				synaptics_rmi4_suspend(&rmi4_data->pdev->dev);
-				rmi4_data->fb_ready = false;
+		transition = evdata->data;
+		if (rmi4_data->hw_if->board_data->resume_in_workqueue) {
+			if (event == FB_EARLY_EVENT_BLANK) {
+				if (*transition == FB_BLANK_UNBLANK)
+					schedule_work(&(rmi4_data->fb_notify_work));
+			} else if (event == FB_EVENT_BLANK &&
+					*transition == FB_BLANK_POWERDOWN) {
+					flush_work(&(rmi4_data->fb_notify_work));
+					synaptics_rmi4_suspend(&(rmi4_data->pdev->dev));
+					rmi4_data->fb_ready = false;
 #ifdef TOUCH_WAKEUP_EVENT_RECORD
-				if (atomic_read(&wakeup_flag) == 1) {
-					wakeup_event_record_write(EVENT_SCREEN_OFF);
-					atomic_set(&wakeup_flag, 0);
+					if (atomic_read(&wakeup_flag) == 1) {
+						wakeup_event_record_write(EVENT_SCREEN_OFF);
+						atomic_set(&wakeup_flag, 0);
+					}
+#endif
+			}
+		} else {
+			if (event == FB_EVENT_BLANK) {
+				if (*transition == FB_BLANK_POWERDOWN) {
+					synaptics_rmi4_suspend(&rmi4_data->pdev->dev);
+					rmi4_data->fb_ready = false;
+#ifdef TOUCH_WAKEUP_EVENT_RECORD
+					if (atomic_read(&wakeup_flag) == 1) {
+						wakeup_event_record_write(EVENT_SCREEN_OFF);
+						atomic_set(&wakeup_flag, 0);
+					}
+#endif
+				} else if (*transition == FB_BLANK_UNBLANK) {
+					synaptics_rmi4_resume(&rmi4_data->pdev->dev);
+					rmi4_data->fb_ready = true;
+#ifdef TOUCH_WAKEUP_EVENT_RECORD
+					if (atomic_read(&wakeup_flag) == 1)
+						wakeup_event_record_write(EVENT_SCREEN_ON);
+#endif
 				}
-#endif
-			} else if (*transition == FB_BLANK_UNBLANK) {
-				synaptics_rmi4_resume(&rmi4_data->pdev->dev);
-				rmi4_data->fb_ready = true;
-#ifdef TOUCH_WAKEUP_EVENT_RECORD
-				if (atomic_read(&wakeup_flag) == 1)
-					wakeup_event_record_write(EVENT_SCREEN_ON);
-#endif
 			}
 		}
 	}

@@ -171,6 +171,8 @@ static int parse_dt(struct device *dev, struct synaptics_dsx_board_data *bdata)
 
 	bdata->use_charger_bit = of_property_read_bool(np, "synaptics,use-charger-bit");
 
+	bdata->resume_in_workqueue = of_property_read_bool(np, "synaptics,resume-in-workqueue");
+
 	bdata->power_gpio = of_get_named_gpio_flags(np,
 			"synaptics,power-gpio", 0, NULL);
 	if (bdata->power_gpio >= 0) {
