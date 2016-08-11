@@ -864,6 +864,7 @@ static int get_property_from_fg(struct smbchg_chip *chip,
 	return rc;
 }
 
+static int get_prop_batt_voltage_now(struct smbchg_chip *chip);
 #define DEFAULT_BATT_CAPACITY	50
 static int get_prop_batt_capacity(struct smbchg_chip *chip)
 {
@@ -877,6 +878,14 @@ static int get_prop_batt_capacity(struct smbchg_chip *chip)
 		pr_smb(PR_STATUS, "Couldn't get capacity rc = %d\n", rc);
 		capacity = DEFAULT_BATT_CAPACITY;
 	}
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (is_usb_present(chip)
+			&& (POWER_SUPPLY_STATUS_FULL == get_prop_batt_status(chip))
+			&& get_prop_batt_voltage_now(chip) > 4300000)
+		return 100;
+#endif
+
 	return capacity;
 }
 
@@ -1032,7 +1041,7 @@ static int calc_thermal_limited_current(struct smbchg_chip *chip,
 		therm_ma = (int)chip->thermal_mitigation[chip->therm_lvl_sel];
 		if (therm_ma < current_ma) {
 			pr_smb(PR_STATUS,
-				"Limiting current due to thermal: %d mA",
+				"Limiting current due to thermal: %d mA\n",
 				therm_ma);
 			return therm_ma;
 		}
@@ -1535,6 +1544,24 @@ static int smbchg_get_min_parallel_current_ma(struct smbchg_chip *chip)
 		return chip->parallel.min_9v_current_thr_ma;
 	return chip->parallel.min_current_thr_ma;
 }
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+static int smbchg_is_hvdcp(struct smbchg_chip *chip)
+{
+	int rc;
+	u8 reg;
+
+	rc = smbchg_read(chip, &reg,
+			chip->usb_chgpth_base + USBIN_HVDCP_STS, 1);
+	if (rc < 0) {
+		dev_err(chip->dev, "Couldn't read usb status rc = %d\n", rc);
+		return 0;
+	}
+	if ((reg & USBIN_HVDCP_SEL_BIT) && (reg & USBIN_HVDCP_SEL_9V_BIT))
+		return 1;
+	return 0;
+}
+#endif
 
 #define ICL_STS_1_REG			0x7
 #define ICL_STS_2_REG			0x9
@@ -2403,6 +2430,11 @@ static int smbchg_system_temp_level_set(struct smbchg_chip *chip,
 
 	if (lvl_sel == chip->therm_lvl_sel)
 		return 0;
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (!smbchg_is_hvdcp(chip))
+		return 0;
+#endif
 
 	mutex_lock(&chip->current_change_lock);
 	prev_therm_lvl = chip->therm_lvl_sel;
@@ -3939,7 +3971,12 @@ static void increment_aicl_count(struct smbchg_chip *chip)
 	long elapsed_seconds;
 	unsigned long now_seconds;
 
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	pr_smb(PR_INTERRUPT, "Aicl triggered icl:%d c:%d dgltch:%d first:%ld\n",
+			smbchg_get_aicl_level_ma(chip),
+#else
 	pr_smb(PR_INTERRUPT, "aicl count c:%d dgltch:%d first:%ld\n",
+#endif
 			chip->aicl_irq_count, chip->aicl_deglitch_short,
 			chip->first_aicl_seconds);
 
@@ -3978,9 +4015,16 @@ static void increment_aicl_count(struct smbchg_chip *chip)
 			 * triggered in a short time
 			 */
 			chip->very_weak_charger = true;
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+			rc = smbchg_set_high_usb_chg_current(chip, usb_current_table[0]);
+			if (rc < 0)
+				dev_err(chip->dev, "Couldn't set %dmA rc = %d\n",
+						usb_current_table[0], rc);
+#else
 			rc = smbchg_hw_aicl_rerun_en(chip, false);
 			if (rc)
 				pr_err("could not enable aicl reruns: %d", rc);
+#endif
 			bad_charger = true;
 			chip->aicl_irq_count = 0;
 		} else if ((get_prop_charge_type(chip) ==
@@ -4131,7 +4175,11 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 		val->intval = get_prop_batt_health(chip);
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
+#else
 		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+#endif
 		break;
 	case POWER_SUPPLY_PROP_FLASH_CURRENT_MAX:
 		val->intval = smbchg_calc_max_flash_current(chip);
@@ -4476,6 +4524,7 @@ static irqreturn_t power_ok_handler(int irq, void *_chip)
 
 	smbchg_read(chip, &reg, chip->misc_base + RT_STS, 1);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+
 	return IRQ_HANDLED;
 }
 
@@ -4609,9 +4658,16 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 				pr_err("could not disable charger: %d", rc);
 		} else if ((chip->aicl_deglitch_short || chip->force_aicl_rerun)
 			&& aicl_level == usb_current_table[0]) {
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+			rc = smbchg_set_high_usb_chg_current(chip, aicl_level);
+			if (rc < 0)
+				dev_err(chip->dev,
+					"Couldn't set %dmA rc = %d\n", aicl_level, rc);
+#else
 			rc = smbchg_hw_aicl_rerun_en(chip, false);
 			if (rc)
 				pr_err("could not enable aicl reruns: %d", rc);
+#endif
 		}
 		rc = power_supply_set_health_state(chip->usb_psy,
 				POWER_SUPPLY_HEALTH_UNSPEC_FAILURE);
@@ -4691,6 +4747,11 @@ static irqreturn_t otg_oc_handler(int irq, void *_chip)
 
 	if (elapsed_us > OTG_OC_RETRY_DELAY_US)
 		chip->otg_retries = 0;
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	if (is_otg_present(chip) == false)
+		return IRQ_HANDLED;
+#endif
 
 	/*
 	 * Due to a HW bug in the PMI8994 charger, the current inrush that
@@ -4896,6 +4957,17 @@ static inline int get_bpd(const char *name)
 #define HVDCP_AUTH_ALG_EN_BIT		BIT(6)
 #define CMD_APSD			0x41
 #define APSD_RERUN_BIT			BIT(0)
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+#define TRIM_OPTIONS_15_8		0xF5
+#define AICL_ADC_BIT			BIT(6)
+#define AICL_INIT_BIT			BIT(7)
+#define VBL_CFG					0xF1
+#define VBL_CFG_MASK			SMB_MASK(3, 0)
+#define VBL_THR_2P5				0x01
+#define VBL_THR_2P7				0x03
+#define VBL_THR_2P88			0x09
+#define VBL_THR_3P35			0x0d
+#endif
 static int smbchg_hw_init(struct smbchg_chip *chip)
 {
 	int rc, i;
@@ -4936,6 +5008,16 @@ static int smbchg_hw_init(struct smbchg_chip *chip)
 				rc);
 		return rc;
 	}
+
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	rc = smbchg_sec_masked_write(chip, chip->misc_base + TRIM_OPTIONS_15_8,
+			AICL_ADC_BIT | AICL_INIT_BIT, 0);
+	if (rc < 0) {
+		dev_err(chip->dev, "Couldn't disable AICL ADC function rc=%d\n",
+				rc);
+		return rc;
+	}
+#endif
 
 	/*
 	 * Do not force using current from the register i.e. use auto
@@ -5180,6 +5262,10 @@ static int smbchg_hw_init(struct smbchg_chip *chip)
 	}
 
 	smbchg_charging_status_change(chip);
+#ifdef CONFIG_MACH_XIAOMI_MSM8992
+	smbchg_sec_masked_write(chip, chip->bat_if_base + VBL_CFG,
+			VBL_CFG_MASK, VBL_THR_2P7);
+#endif
 
 	/*
 	 * The charger needs 20 milliseconds to go into battery supplementary
