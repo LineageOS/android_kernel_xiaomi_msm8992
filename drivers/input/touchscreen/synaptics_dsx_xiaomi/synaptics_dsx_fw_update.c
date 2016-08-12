@@ -3648,13 +3648,31 @@ int synaptics_fw_updater(const unsigned char *fw_data)
 EXPORT_SYMBOL(synaptics_fw_updater);
 
 #ifdef DO_STARTUP_FW_UPDATE
+static int no_startup_fw_update = 1;
+
+static __init int startup_fw_update_setup(char *s)
+{
+	if (!strcmp(s,"1"))
+		no_startup_fw_update = 0;
+
+	return 1;
+}
+__setup("synaptics_dsx.startup_fw_update=", startup_fw_update_setup);
+
 static void fwu_startup_fw_update_work(struct work_struct *work)
 {
 	static unsigned char do_once = 1;
+	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
 #ifdef WAIT_FOR_FB_READY
 	unsigned int timeout;
-	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
 #endif
+
+	if (no_startup_fw_update) {
+		dev_info(rmi4_data->pdev->dev.parent,
+				"%s: Startup FW update disabled\n",
+				__func__);
+		return;
+	}
 
 	if (!do_once)
 		return;
@@ -4119,6 +4137,9 @@ static int synaptics_rmi4_fwu_init(struct synaptics_rmi4_data *rmi4_data)
 	}
 
 #ifdef DO_STARTUP_FW_UPDATE
+	if (no_startup_fw_update)
+		return 0;
+
 	fwu->fwu_workqueue = create_singlethread_workqueue("fwu_workqueue");
 	INIT_WORK(&fwu->fwu_work, fwu_startup_fw_update_work);
 	queue_work(fwu->fwu_workqueue,
@@ -4154,9 +4175,11 @@ static void synaptics_rmi4_fwu_remove(struct synaptics_rmi4_data *rmi4_data)
 		goto exit;
 
 #ifdef DO_STARTUP_FW_UPDATE
-	cancel_work_sync(&fwu->fwu_work);
-	flush_workqueue(fwu->fwu_workqueue);
-	destroy_workqueue(fwu->fwu_workqueue);
+	if (!no_startup_fw_update) {
+		cancel_work_sync(&fwu->fwu_work);
+		flush_workqueue(fwu->fwu_workqueue);
+		destroy_workqueue(fwu->fwu_workqueue);
+	}
 #endif
 
 	for (attr_count = 0; attr_count < ARRAY_SIZE(attrs); attr_count++) {
