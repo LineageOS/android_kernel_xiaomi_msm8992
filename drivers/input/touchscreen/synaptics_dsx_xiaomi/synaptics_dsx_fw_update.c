@@ -29,7 +29,7 @@
 #include "synaptics_dsx_core.h"
 
 #define FW_IMAGE_NAME "synaptics/startup_fw_update.img"
-/* #define DO_STARTUP_FW_UPDATE */
+#define DO_STARTUP_FW_UPDATE
 
 /*
 #ifdef DO_STARTUP_FW_UPDATE
