@@ -36,8 +36,8 @@
 #include <asm/bootinfo.h>
 
 #define CM36686_I2C_NAME    "cm36686"
-#define CM_PROX_IIO_NAME    "distance"
-#define CM_LIGHT_IIO_NAME   "als"
+#define CM_PROX_NAME        "cm36686-ps"
+#define CM_LIGHT_NAME       "cm36686-als"
 
 #define I2C_RETRY_COUNT     10
 
@@ -607,9 +607,9 @@ static ssize_t cm_show_sampling_frequency_available(struct device *dev,
 	int len = 0;
 
 	iio_device = (struct iio_dev *)dev_get_drvdata(dev);
-	if (!strcmp(iio_device->name, CM_PROX_IIO_NAME))
+	if (!strcmp(iio_device->name, CM_PROX_NAME))
 		len = scnprintf(buf + len, PAGE_SIZE, "%d ", CM36686_PROX_DELAY);
-	if (!strcmp(iio_device->name, CM_LIGHT_IIO_NAME))
+	if (!strcmp(iio_device->name, CM_LIGHT_NAME))
 		len = scnprintf(buf + len, PAGE_SIZE, "%d ", CM36686_ALS_DELAY);
 	if (len > 0)
 		buf[len - 1] = '\n';
@@ -894,7 +894,7 @@ static int cm_buffer_postenable(struct iio_dev *indio_dev)
 	int ret = 0;
 
 	mutex_lock(&data->mutex);
-	if (!strncmp(indio_dev->name, CM_PROX_IIO_NAME, strlen(CM_PROX_IIO_NAME)))
+	if (!strncmp(indio_dev->name, CM_PROX_NAME, strlen(CM_PROX_NAME)))
 		ret = psensor_enable(indio_dev, true, data->prox_continus);
 	else
 		ret = lsensor_enable(indio_dev, true, CM36686_POLLING_MODE);
@@ -910,7 +910,7 @@ static int cm_buffer_predisable(struct iio_dev *indio_dev)
 	int ret = 0;
 
 	mutex_lock(&data->mutex);
-	if (!strncmp(indio_dev->name, CM_PROX_IIO_NAME, strlen(CM_PROX_IIO_NAME)))
+	if (!strncmp(indio_dev->name, CM_PROX_NAME, strlen(CM_PROX_NAME)))
 		ret = psensor_enable(indio_dev, false, data->prox_continus);
 	else
 		ret = lsensor_enable(indio_dev, false, CM36686_POLLING_MODE);
@@ -1106,7 +1106,7 @@ static int cm_proximity_iio_setup(struct cm36686_data *data)
 	idev->num_channels = ARRAY_SIZE(cm_proximity_channels);
 	idev->dev.parent = &client->dev;
 	idev->info = &cm_proximity_info;
-	idev->name = CM_PROX_IIO_NAME;
+	idev->name = CM_PROX_NAME;
 	idev->modes = INDIO_DIRECT_MODE;
 
 	priv_data = iio_priv(idev);
@@ -1158,7 +1158,7 @@ static int cm_light_iio_setup(struct cm36686_data *data)
 	idev->num_channels = ARRAY_SIZE(cm_light_channels);
 	idev->dev.parent = &client->dev;
 	idev->info = &cm_light_info;
-	idev->name = CM_LIGHT_IIO_NAME;
+	idev->name = CM_LIGHT_NAME;
 	idev->modes = INDIO_DIRECT_MODE;
 
 	priv_data = iio_priv(idev);
