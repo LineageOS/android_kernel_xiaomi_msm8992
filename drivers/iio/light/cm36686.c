@@ -35,160 +35,145 @@
 #include <linux/of_irq.h>
 #include <asm/bootinfo.h>
 
-#define CM36686_I2C_NAME		"cm36686"
-#define CM_PROX_IIO_NAME		"distance"
-#define CM_LIGHT_IIO_NAME		"als"
+#define CM36686_I2C_NAME    "cm36686"
+#define CM_PROX_IIO_NAME    "distance"
+#define CM_LIGHT_IIO_NAME   "als"
 
-#define I2C_RETRY_COUNT			10
+#define I2C_RETRY_COUNT     10
 
-#define PRX_SENSOR			0
-#define ALS_SENSOR			1
+/* Command codes */
+#define	ALS_CONF            0x00
+#define	ALS_THDH            0x01
+#define	ALS_THDL            0x02
+#define	ALS_DATA            0x09
+#define	ALS_DATA_RESERVE    0x0A
+#define	PS_CONF1            0x03
+#define	PS_CONF3            0x04
+#define	PS_CANC             0x05
+#define	PS_THDL             0x06
+#define	PS_THDH             0x07
+#define	PS_DATA             0x08
+#define	INT_FLAG            0x0B
+#define	ID_REG              0x0C
 
-/*Define Command Code*/
-#define	ALS_CONF			0x00
-#define	ALS_THDH			0x01
-#define	ALS_THDL			0x02
-#define	PS_CONF1			0x03
-#define	PS_CONF3			0x04
-#define	PS_CANC				0x05
-#define	PS_THDL				0x06
-#define	PS_THDH				0x07
+/* ALS CONF commands */
+#define CM36686_ALS_IT_80MS     (0 << 6)
+#define CM36686_ALS_IT_160MS    (1 << 6)
+#define CM36686_ALS_IT_320MS    (2 << 6)
+#define CM36686_ALS_IT_640MS    (3 << 6)
+#define CM36686_ALS_PERS_1      (0 << 2)
+#define CM36686_ALS_PERS_2      (1 << 2)
+#define CM36686_ALS_PERS_4      (2 << 2)
+#define CM36686_ALS_PERS_8      (3 << 2)
+#define CM36686_ALS_INT_EN      (1 << 1) /* enable/disable interrupt */
+#define CM36686_ALS_INT_MASK    0xFFFD
+#define CM36686_ALS_SD          (1 << 0) /* enable/disable ALS */
+#define CM36686_ALS_SD_MASK	    0xFFFE
+#define CM36686_ALS_CONF_DEFAULT    (CM36686_ALS_SD | CM36686_ALS_IT_160MS)
 
-#define	PS_DATA				0x08
-#define	ALS_DATA			0x09
-#define	ALS_DATA_RESERVE	        0x0A
-#define	INT_FLAG			0x0B
-#define	ID_REG				0x0C
+/* PS CONF2 commands */
+#define CM36686_PS_12BITS       (0 << 11)
+#define CM36686_PS_16BITS       (1 << 11)
+#define CM36686_PS_INT_OFF      (0 << 8) /* enable/disable interrupt */
+#define CM36686_PS_INT_IN       (1 << 8)
+#define CM36686_PS_INT_OUT      (2 << 8)
+#define CM36686_PS_INT_IN_AND_OUT    (3 << 8)
+#define CM36686_PS_INT_MASK     0xFCFF
 
-/*cm36686*/
-/*for ALS CONF command*/
-#define CM36686_ALS_IT_80MS		(0 << 6)
-#define CM36686_ALS_IT_160MS		(1 << 6)
-#define CM36686_ALS_IT_320MS		(2 << 6)
-#define CM36686_ALS_IT_640MS		(3 << 6)
-#define CM36686_ALS_PERS_1		(0 << 2)
-#define CM36686_ALS_PERS_2		(1 << 2)
-#define CM36686_ALS_PERS_4		(2 << 2)
-#define CM36686_ALS_PERS_8		(3 << 2)
-#define CM36686_ALS_INT_EN		(1 << 1) /*enable/disable Interrupt*/
-#define CM36686_ALS_INT_MASK		0xFFFD
-#define CM36686_ALS_SD			(1 << 0) /*enable/disable ALS func, 1:disable , 0: enable*/
-#define CM36686_ALS_SD_MASK		0xFFFE
+/* PS CONF1 commands */
+#define CM36686_PS_DR_1_40      (0 << 6)
+#define CM36686_PS_DR_1_80      (1 << 6)
+#define CM36686_PS_DR_1_160     (2 << 6)
+#define CM36686_PS_DR_1_320     (3 << 6)
+#define CM36686_PS_PERS_1       (0 << 4)
+#define CM36686_PS_PERS_2       (1 << 4)
+#define CM36686_PS_PERS_3       (2 << 4)
+#define CM36686_PS_PERS_4       (3 << 4)
+#define CM36686_PS_IT_1T        (0 << 1)
+#define CM36686_PS_IT_1_5T      (1 << 2)
+#define CM36686_PS_IT_2T        (2 << 2)
+#define CM36686_PS_IT_2_5T      (3 << 1)
+#define CM36686_PS_IT_3T        (4 << 1)
+#define CM36686_PS_IT_3_5T      (5 << 1)
+#define CM36686_PS_IT_4T        (6 << 1)
+#define CM36686_PS_IT_8T        (7 << 1)
+#define CM36686_PS_SD           (1 << 0) /* enable/disable PS */
+#define CM36686_PS_SD_MASK      0xFFFE
+#define CM36686_PS_CONF1_CONF2_DEFAULT    (CM36686_PS_IT_2_5T | \
+			CM36686_PS_DR_1_80 | CM36686_PS_SD | \
+			CM36686_PS_12BITS | CM36686_PS_INT_OFF)
 
-#define CM36686_ALS_CONF_DEFAULT	(CM36686_ALS_SD | CM36686_ALS_IT_160MS)
-
-
-/*for PS CONF2 command*/
-#define CM36686_PS_12BITS		(0 << 11)
-#define CM36686_PS_16BITS		(1 << 11)
-#define CM36686_PS_INT_OFF		(0 << 8) /*enable/disable Interrupt*/
-#define CM36686_PS_INT_IN		(1 << 8)
-#define CM36686_PS_INT_OUT		(2 << 8)
-#define CM36686_PS_INT_IN_AND_OUT	(3 << 8)
-#define CM36686_PS_INT_MASK		0xFCFF
-
-/*for PS CONF1 command*/
-#define CM36686_PS_DR_1_40		(0 << 6)
-#define CM36686_PS_DR_1_80		(1 << 6)
-#define CM36686_PS_DR_1_160		(2 << 6)
-#define CM36686_PS_DR_1_320		(3 << 6)
-#define CM36686_PS_PERS_1		(0 << 4)
-#define CM36686_PS_PERS_2		(1 << 4)
-#define CM36686_PS_PERS_3		(2 << 4)
-#define CM36686_PS_PERS_4		(3 << 4)
-#define CM36686_PS_IT_1T		(0 << 1)
-#define CM36686_PS_IT_1_5T		(1 << 2)
-#define CM36686_PS_IT_2T		(2 << 2)
-#define CM36686_PS_IT_2_5T		(3 << 1)
-#define CM36686_PS_IT_3T		(4 << 1)
-#define CM36686_PS_IT_3_5T		(5 << 1)
-#define CM36686_PS_IT_4T		(6 << 1)
-#define CM36686_PS_IT_8T		(7 << 1)
-#define CM36686_PS_SD			(1 << 0) /*enable/disable PS func, 1:disable , 0: enable*/
-#define CM36686_PS_SD_MASK		0xFFFE
-
-#define CM36686_PS_CONF1_CONF2_DEFAULT	(CM36686_PS_IT_2_5T | CM36686_PS_DR_1_80 | \
-					 CM36686_PS_SD | CM36686_PS_12BITS | CM36686_PS_INT_OFF)
-
-
-
-/*for PS CONF3 command*/
-#define CM36686_PS_MS_NORMAL		(0 << 14)
+/* PS CONF3 commands */
+#define CM36686_PS_MS_NORMAL        (0 << 14)
 #define CM36686_PS_MS_LOGIC_ENABLE	(1 << 14)
-#define CM36686_LED_I_50		(0 << 8)
-#define CM36686_LED_I_75		(1 << 8)
-#define CM36686_LED_I_100		(2 << 8)
-#define CM36686_LED_I_120		(3 << 8)
-#define CM36686_LED_I_140		(4 << 8)
-#define CM36686_LED_I_160		(5 << 8)
-#define CM36686_LED_I_180		(6 << 8)
-#define CM36686_LED_I_200		(7 << 8)
-#define CM36686_PS_SMART_PERS_ENABLE	(1 << 4)
-#define CM36686_PS_ACTIVE_FORCE_MODE	(1 << 3)
-#define CM36686_PS_ACTIVE_FORCE_TRIG	(1 << 2)
-/* CMD4 */
-#define CM36686_PS_CONF3_MS_DEFAULT	(CM36686_LED_I_160)
+#define CM36686_LED_I_50        (0 << 8)
+#define CM36686_LED_I_75        (1 << 8)
+#define CM36686_LED_I_100       (2 << 8)
+#define CM36686_LED_I_120       (3 << 8)
+#define CM36686_LED_I_140       (4 << 8)
+#define CM36686_LED_I_160       (5 << 8)
+#define CM36686_LED_I_180       (6 << 8)
+#define CM36686_LED_I_200       (7 << 8)
+#define CM36686_PS_SMART_PERS_ENABLE    (1 << 4)
+#define CM36686_PS_ACTIVE_FORCE_MODE    (1 << 3)
+#define CM36686_PS_ACTIVE_FORCE_TRIG    (1 << 2)
+#define CM36686_PS_CONF3_MS_DEFAULT     (CM36686_LED_I_160)
 
+/* INT flags*/
+#define INT_FLAG_PS_SPFLAG      (1<<14)
+#define INT_FLAG_ALS_IF_L       (1<<13)
+#define INT_FLAG_ALS_IF_H       (1<<12)
+#define INT_FLAG_PS_IF_CLOSE    (1<<9)
+#define INT_FLAG_PS_IF_AWAY     (1<<8)
 
-/*for INT FLAG*/
-#define INT_FLAG_PS_SPFLAG		(1<<14)
-#define INT_FLAG_ALS_IF_L		(1<<13)
-#define INT_FLAG_ALS_IF_H		(1<<12)
-#define INT_FLAG_PS_IF_CLOSE		(1<<9)
-#define INT_FLAG_PS_IF_AWAY		(1<<8)
+#define CM36686_CHIP_ID         0x0086
 
-#define CM36686_CHIP_ID			0x0086
+#define CM36686_PROX_DELAY      100
+#define CM36686_ALS_DELAY       170
 
-#define CM36686_PROX_DELAY		100
-#define CM36686_ALS_DELAY		170
-
-#define CM36686_INT_MODE		0
-#define CM36686_POLLING_MODE		1
+#define CM36686_INT_MODE        0
+#define CM36686_POLLING_MODE    1
 
 static int psensor_enable(struct iio_dev *indio_dev, bool en, bool mode);
 static int lsensor_enable(struct iio_dev *indio_dev, bool en, bool mode);
 
 static int als_on_in_suspend;
 
-
 struct cm36686_data {
-	/* common state */
-	struct mutex		mutex;
-	struct i2c_client	*client;
-
-	bool			suspended;
-	bool			dump_output;
-	bool			dump_register;
+	struct i2c_client   *client;
+	struct mutex        mutex;
+	bool    suspended;
+	bool    dump_output;
+	bool    dump_register;
 	int     irq;
 
-	/* for proximity sensor */
-	struct iio_dev		*prox_idev;
-	bool			prox_enabled;
-	/*0 means interrupt mode, 1 continus mode*/
-	bool			prox_continus;
-	bool			prox_first_data;
-	bool			prox_near;
-	uint16_t		prox_offset;
-	uint32_t		prox_thres_near;
-	uint32_t		prox_thres_far;
-	uint16_t		prox_raw;
+	/* proximity sensor */
+	struct iio_dev      *prox_idev;
+	bool        prox_enabled;
+	bool        prox_continus;
+	bool        prox_first_data;
+	bool        prox_near;
+	uint16_t    prox_offset;
+	uint32_t    prox_thres_near;
+	uint32_t    prox_thres_far;
+	uint16_t    prox_raw;
 	struct delayed_work	prox_delayed_work;
 
-	/* for light sensor */
-	struct iio_dev		*als_idev;
-	bool			als_enabled;
-	uint16_t		als_light;
-	int			als_raw;
+	/* light sensor */
+	struct iio_dev  *als_idev;
+	bool            als_enabled;
+	uint16_t        als_light;
+	int             als_raw;
 	struct delayed_work	als_delayed_work;
 };
 
 struct cm36686_platform_data {
-	uint32_t		als_trans_ratio;
+	uint32_t        als_trans_ratio;
 
 	/* default proximity sample period */
-	uint32_t		prox_default_offset;
-	uint32_t                prox_default_thres_near;
-	uint32_t                prox_default_thres_far;
+	uint32_t        prox_default_offset;
+	uint32_t        prox_default_thres_near;
+	uint32_t        prox_default_thres_far;
 };
 
 struct cm36686_el_data {
@@ -215,8 +200,6 @@ struct cm36686_el_data {
 	}, \
 }
 
-
-
 static const struct iio_chan_spec cm_proximity_channels[] = {
 	CM_SENSORS_CHANNELS(IIO_PROXIMITY,
 		BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SAMP_FREQ),
@@ -233,7 +216,8 @@ static const struct iio_chan_spec cm_light_channels[] = {
 	IIO_CHAN_SOFT_TIMESTAMP(1)
 };
 
-static int i2c_rxdata(struct i2c_client *client, uint8_t cmd, uint8_t *rxData, int length)
+static int i2c_rxdata(struct i2c_client *client,
+		uint8_t cmd, uint8_t *rxData, int length)
 {
 	uint8_t loop_i;
 
@@ -259,7 +243,7 @@ static int i2c_rxdata(struct i2c_client *client, uint8_t cmd, uint8_t *rxData, i
 
 	if (loop_i >= I2C_RETRY_COUNT) {
 		dev_err(&client->dev, "[PS_ERR][CM36686 error] %s retry over %d\n",
-			__func__, I2C_RETRY_COUNT);
+				__func__, I2C_RETRY_COUNT);
 		return -EIO;
 	}
 
@@ -286,14 +270,15 @@ static int i2c_txdata(struct i2c_client *client, uint8_t *txData, int length)
 
 	if (loop_i >= I2C_RETRY_COUNT) {
 		dev_err(&client->dev, "[ALS+PS_ERR][CM36686 error] %s retry over %d\n",
-			__func__, I2C_RETRY_COUNT);
+				__func__, I2C_RETRY_COUNT);
 		return -EIO;
 	}
 
 	return 0;
 }
 
-static int cm_i2c_read_word(struct i2c_client *client, uint8_t cmd, uint16_t *pdata)
+static int cm_i2c_read_word(struct i2c_client *client,
+		uint8_t cmd, uint16_t *pdata)
 {
 	uint8_t buffer[2];
 	int ret = 0;
@@ -304,11 +289,11 @@ static int cm_i2c_read_word(struct i2c_client *client, uint8_t cmd, uint16_t *pd
 	ret = i2c_rxdata(client, cmd, buffer, 2);
 	if (ret < 0) {
 		dev_err(&client->dev, "[ALS+PS_ERR][CM36686 error]%s: I2C_RxData fail [0x%x]\n",
-			__func__, cmd);
+				__func__, cmd);
 		return ret;
 	}
 
-	*pdata = (buffer[1]<<8)|buffer[0];
+	*pdata = (buffer[1] << 8) | buffer[0];
 
 	return ret;
 }
@@ -325,7 +310,7 @@ static int cm_i2c_write_word(struct i2c_client *client, uint8_t cmd, uint16_t da
 	ret = i2c_txdata(client, buffer, 3);
 	if (ret < 0) {
 		dev_err(&client->dev, "[ALS+PS_ERR][CM36686 error]%s: I2C_TxData fail [0x%x]\n",
-			__func__, cmd);
+				__func__, cmd);
 		return -EIO;
 	}
 
@@ -347,12 +332,13 @@ static void dump_register(struct i2c_client *client)
 	DUMP_REGISTER(client, ALS_DATA, cmd_data);
 	DUMP_REGISTER(client, ALS_DATA_RESERVE, cmd_data);
 }
+
 static int cm_proximity_read_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int *val, int *val2, long mask)
+		struct iio_chan_spec const *chan,
+		int *val, int *val2, long mask)
 {
-	int ret = 0;
 	struct cm36686_data *data;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(indio_dev));
 
@@ -379,29 +365,32 @@ static int cm_proximity_read_raw(struct iio_dev *indio_dev,
 
 static int update_prox_threhold(struct cm36686_data *data)
 {
-	int ret = 0;
+	struct i2c_client *client = data->client;
 	uint16_t ps_low_thrd;
 	uint16_t ps_high_thrd;
-	struct i2c_client *client = data->client;
+	int ret = 0;
 
 	ps_high_thrd = data->prox_offset + data->prox_thres_near;
 	ps_low_thrd = data->prox_offset + data->prox_thres_far;
+
 	ret = cm_i2c_write_word(client, PS_THDL, ps_low_thrd);
 	if (ret < 0)
 		pr_err("cm36686: write PS_THDL fail\n");
+
 	ret = cm_i2c_write_word(client, PS_THDH, ps_high_thrd);
 	if (ret < 0)
 		pr_err("cm36686: write PS_THDH fail\n");
+
 	pr_debug("cm36686: store offset = %d\n", data->prox_offset);
 	return ret;
 }
 
 static int cm_proximity_write_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int val, int val2, long mask)
+		struct iio_chan_spec const *chan,
+		int val, int val2, long mask)
 {
-	int ret = 0;
 	struct cm36686_data *data;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(indio_dev));
 
@@ -416,19 +405,20 @@ static int cm_proximity_write_raw(struct iio_dev *indio_dev,
 }
 
 static int cm_proximity_write_get_fmt(struct iio_dev *indio_dev,
-				      struct iio_chan_spec const *chan,
-				      long mask)
+		struct iio_chan_spec const *chan,
+		long mask)
 {
 	return IIO_VAL_INT_PLUS_MICRO;
 }
 
 static int cm_light_get_scale(struct cm36686_data *data,
-				int *val, int *val2)
+		int *val, int *val2)
 {
-	int scale;
 	struct cm36686_platform_data *pdata;
+	int scale;
 
 	pdata = data->client->dev.platform_data;
+
 	/* als_trans_ratio * 0.08 * 1000000 */
 	scale = pdata->als_trans_ratio * 40000;
 	*val = scale / 1000000;
@@ -438,11 +428,11 @@ static int cm_light_get_scale(struct cm36686_data *data,
 }
 
 static int cm_light_read_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int *val, int *val2, long mask)
+		struct iio_chan_spec const *chan,
+		int *val, int *val2, long mask)
 {
-	int ret = 0;
 	struct cm36686_data *data;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(indio_dev));
 
@@ -472,11 +462,11 @@ static int cm_light_read_raw(struct iio_dev *indio_dev,
 }
 
 static int cm_light_write_raw(struct iio_dev *indio_dev,
-				struct iio_chan_spec const *chan,
-				int val, int val2, long mask)
+		struct iio_chan_spec const *chan,
+		int val, int val2, long mask)
 {
-	int ret = 0;
 	struct cm36686_data *data;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(indio_dev));
 
@@ -491,14 +481,14 @@ static int cm_light_write_raw(struct iio_dev *indio_dev,
 }
 
 static int cm_light_write_get_fmt(struct iio_dev *indio_dev,
-				      struct iio_chan_spec const *chan,
-				      long mask)
+		struct iio_chan_spec const *chan,
+		long mask)
 {
 	return IIO_VAL_INT_PLUS_MICRO;
 }
 
 static ssize_t cm_show_dump_output(struct device *dev,
-				struct device_attribute *attr, char *buf)
+		struct device_attribute *attr, char *buf)
 {
 	struct cm36686_data *data;
 	unsigned long value;
@@ -516,8 +506,8 @@ static ssize_t cm_store_dump_output(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct cm36686_data *data;
-	int ret = 0;
 	unsigned long value;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
 
@@ -550,8 +540,8 @@ static ssize_t cm_store_dump_register(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct cm36686_data *data;
-	int ret = 0;
 	unsigned long value;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
 
@@ -583,13 +573,13 @@ static ssize_t cm_show_continus_mode(struct device *dev,
 static ssize_t cm_store_continus_mode(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
-	struct cm36686_data *data;
 	struct iio_dev *iio_device;
-	int ret = 0;
+	struct cm36686_data *data;
 	unsigned long value;
+	int ret = 0;
 
-	data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
 	iio_device = (struct iio_dev *)dev_get_drvdata(dev);
+	data = *((struct cm36686_data **)iio_priv(iio_device));
 
 	ret = strict_strtoul(buf, 0, &value);
 	if (ret >= 0) {
@@ -611,7 +601,7 @@ static ssize_t cm_store_continus_mode(struct device *dev,
 }
 
 static ssize_t cm_show_sampling_frequency_available(struct device *dev,
-				struct device_attribute *attr, char *buf)
+		struct device_attribute *attr, char *buf)
 {
 	struct iio_dev *iio_device;
 	int len = 0;
@@ -644,9 +634,11 @@ static ssize_t cm_show_calibration_offset(struct device *dev,
 static ssize_t cm_store_calibration_offset(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
-	int ret = 0;
+	struct cm36686_data *data;
 	unsigned long value;
-	struct cm36686_data *data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
+	int ret = 0;
+	
+	data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
 
 	ret = strict_strtoul(buf, 0, &value);
 	mutex_lock(&data->mutex);
@@ -654,8 +646,9 @@ static ssize_t cm_store_calibration_offset(struct device *dev,
 		if (value < 4096) {
 			data->prox_offset = value;
 			update_prox_threhold(data);
-		} else
+		} else {
 			pr_err("%s: invalid offset:%lu\n", __func__, value);
+		}
 	}
 	mutex_unlock(&data->mutex);
 	return ret < 0 ? ret : size;
@@ -680,10 +673,11 @@ static ssize_t cm_store_prox_thres_far(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct cm36686_data *data;
-	int ret = 0;
 	unsigned long value;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
+
 	if (value <= data->prox_offset)
 		return data->prox_offset - value;
 
@@ -701,26 +695,27 @@ static ssize_t cm_store_prox_thres_far(struct device *dev,
 static ssize_t cm_show_prox_thres_near(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-       struct cm36686_data *data;
-       unsigned long value;
+	struct cm36686_data *data;
+	unsigned long value;
 
-       data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
+	data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
 
-       mutex_lock(&data->mutex);
-       value = data->prox_thres_near + data->prox_offset;
-       mutex_unlock(&data->mutex);
+	mutex_lock(&data->mutex);
+	value = data->prox_thres_near + data->prox_offset;
+	mutex_unlock(&data->mutex);
 
-       return scnprintf(buf, PAGE_SIZE, "%lu\n", value);
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", value);
 }
 
 static ssize_t cm_store_prox_thres_near(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct cm36686_data *data;
-	int ret = 0;
 	unsigned long value;
+	int ret = 0;
 
 	data = *((struct cm36686_data **)iio_priv(dev_get_drvdata(dev)));
+
 	if (value <= data->prox_offset)
 		return data->prox_offset - value;
 
@@ -730,26 +725,32 @@ static ssize_t cm_store_prox_thres_near(struct device *dev,
 		data->prox_thres_near = value - data->prox_offset;
 		update_prox_threhold(data);
 		mutex_unlock(&data->mutex);
-       }
-
-       return ret < 0 ? ret : size;
+	}
+	return ret < 0 ? ret : size;
 }
 
 
 static DEVICE_ATTR(dump_output, S_IWUSR | S_IRUGO,
-		cm_show_dump_output, cm_store_dump_output);
+		cm_show_dump_output,
+		cm_store_dump_output);
 static DEVICE_ATTR(dump_register, S_IWUSR | S_IRUGO,
-		cm_show_dump_register, cm_store_dump_register);
+		cm_show_dump_register,
+		cm_store_dump_register);
 static DEVICE_ATTR(continus_mode, S_IWUSR | S_IRUGO,
-		cm_show_continus_mode, cm_store_continus_mode);
+		cm_show_continus_mode,
+		cm_store_continus_mode);
 static DEVICE_ATTR(sampling_frequency_available, S_IWUSR | S_IRUGO,
-		cm_show_sampling_frequency_available, NULL);
+		cm_show_sampling_frequency_available,
+		NULL);
 static DEVICE_ATTR(calibration_offset, S_IWUSR | S_IRUGO,
-		cm_show_calibration_offset, cm_store_calibration_offset);
+		cm_show_calibration_offset,
+		cm_store_calibration_offset);
 static DEVICE_ATTR(prox_thres_far, S_IWUSR | S_IRUGO,
-		cm_show_prox_thres_far, cm_store_prox_thres_far);
+		cm_show_prox_thres_far,
+		cm_store_prox_thres_far);
 static DEVICE_ATTR(prox_thres_near, S_IWUSR | S_IRUGO,
-		cm_show_prox_thres_near, cm_store_prox_thres_near);
+		cm_show_prox_thres_near,
+		cm_store_prox_thres_near);
 
 static struct attribute *cm_prox_attributes[] = {
 	&dev_attr_dump_output.attr,
@@ -795,14 +796,16 @@ static const struct iio_info cm_light_info = {
 
 static int psensor_enable(struct iio_dev *indio_dev, bool en, bool mode)
 {
-	int ret = 0;
+	struct cm36686_data *data = *((struct cm36686_data **)iio_priv(indio_dev));
+	struct i2c_client *client = data->client;
 	uint16_t ps_conf1_conf2;
 	uint16_t ps_conf3_ms;
 	uint16_t ps_low_thrd;
 	uint16_t ps_high_thrd;
-	struct cm36686_data *data = *((struct cm36686_data **)iio_priv(indio_dev));
-	struct i2c_client *client = data->client;
-	pr_debug("cm36686: psensor_enable en = %d, mode = %d, prox_enabled = %d\n", en, mode, data->prox_enabled);
+	int ret = 0;
+
+	pr_debug("cm36686: psensor_enable en = %d, mode = %d, prox_enabled = %d\n",
+			en, mode, data->prox_enabled);
 
 	if (data->prox_enabled == en)
 		goto exit_err_state;
@@ -810,15 +813,19 @@ static int psensor_enable(struct iio_dev *indio_dev, bool en, bool mode)
 	if (mode == CM36686_INT_MODE) {
 		ps_high_thrd = data->prox_offset + data->prox_thres_near;
 		ps_low_thrd = data->prox_offset + data->prox_thres_far;
+
 		ret = cm_i2c_write_word(client, PS_THDL, ps_low_thrd);
 		if (ret < 0)
 			goto exit_err_state;
+
 		ret = cm_i2c_write_word(client, PS_THDH, ps_high_thrd);
 		if (ret < 0)
 			goto exit_err_state;
 
-		ps_conf1_conf2 = CM36686_PS_CONF1_CONF2_DEFAULT | CM36686_PS_INT_IN_AND_OUT | CM36686_PS_PERS_3;
-		ps_conf3_ms = CM36686_PS_CONF3_MS_DEFAULT | CM36686_PS_SMART_PERS_ENABLE;
+		ps_conf1_conf2 = CM36686_PS_CONF1_CONF2_DEFAULT |
+				CM36686_PS_INT_IN_AND_OUT | CM36686_PS_PERS_3;
+		ps_conf3_ms = CM36686_PS_CONF3_MS_DEFAULT |
+				CM36686_PS_SMART_PERS_ENABLE;
 	} else {
 		ps_conf1_conf2 = CM36686_PS_CONF1_CONF2_DEFAULT;
 		ps_conf3_ms = CM36686_PS_CONF3_MS_DEFAULT;
@@ -839,23 +846,26 @@ static int psensor_enable(struct iio_dev *indio_dev, bool en, bool mode)
 	data->prox_enabled = en;
 	if (mode == CM36686_POLLING_MODE || data->prox_first_data) {
 		if (en)
-			schedule_delayed_work(&data->prox_delayed_work, CM36686_PROX_DELAY * HZ / 1000);
+			schedule_delayed_work(&data->prox_delayed_work,
+					CM36686_PROX_DELAY * HZ / 1000);
 		else
 			cancel_delayed_work(&data->prox_delayed_work);
 	}
 
 exit_err_state:
-    return ret;
+	return ret;
 }
 static int lsensor_enable(struct iio_dev *indio_dev, bool en, bool mode)
 {
-	int ret = 0;
-	uint16_t als_conf;
 	struct cm36686_data *data = *((struct cm36686_data **)iio_priv(indio_dev));
 	struct i2c_client *client = data->client;
+	uint16_t als_conf;
+	int ret = 0;
 
 	(void)mode;
-	pr_debug("cm36686: lsensor_enable en = %d, mode = %d, als_enabled = %d\n", en, mode, data->als_enabled);
+
+	pr_debug("cm36686: lsensor_enable en = %d, mode = %d, als_enabled = %d\n",
+			en, mode, data->als_enabled);
 	if (data->als_enabled == en)
 		goto exit_err_state;
 
@@ -870,36 +880,42 @@ static int lsensor_enable(struct iio_dev *indio_dev, bool en, bool mode)
 
 	data->als_enabled = en;
 	if (en)
-		schedule_delayed_work(&data->als_delayed_work, CM36686_ALS_DELAY * HZ / 1000);
+		schedule_delayed_work(&data->als_delayed_work,
+				CM36686_ALS_DELAY * HZ / 1000);
 	else
 		cancel_delayed_work(&data->als_delayed_work);
+
 exit_err_state:
 	return ret;
 }
 static int cm_buffer_postenable(struct iio_dev *indio_dev)
 {
-	int ret = 0;
 	struct cm36686_data *data = *((struct cm36686_data **)iio_priv(indio_dev));
+	int ret = 0;
+
 	mutex_lock(&data->mutex);
 	if (!strncmp(indio_dev->name, CM_PROX_IIO_NAME, strlen(CM_PROX_IIO_NAME)))
 		ret = psensor_enable(indio_dev, true, data->prox_continus);
 	else
 		ret = lsensor_enable(indio_dev, true, CM36686_POLLING_MODE);
 	mutex_unlock(&data->mutex);
+
 	return ret;
 }
 
 
 static int cm_buffer_predisable(struct iio_dev *indio_dev)
 {
-	int ret = 0;
 	struct cm36686_data *data = *((struct cm36686_data **)iio_priv(indio_dev));
+	int ret = 0;
+
 	mutex_lock(&data->mutex);
 	if (!strncmp(indio_dev->name, CM_PROX_IIO_NAME, strlen(CM_PROX_IIO_NAME)))
 		ret = psensor_enable(indio_dev, false, data->prox_continus);
 	else
 		ret = lsensor_enable(indio_dev, false, CM36686_POLLING_MODE);
 	mutex_unlock(&data->mutex);
+
 	return ret;
 }
 
@@ -936,17 +952,15 @@ static void cm_prox_work(struct work_struct *work)
 				struct cm36686_data, prox_delayed_work);
 	struct i2c_client *client = data->client;
 	struct cm36686_el_data el_data;
-	int ret = 0;
+	struct timespec ts;
 	uint16_t raw;
 	bool changed;
-	struct timespec ts;
+	int ret = 0;
 
 	get_monotonic_boottime(&ts);
 	el_data.timestamp = timespec_to_ns(&ts);
 
-
 	mutex_lock(&data->mutex);
-
 	if (data->suspended == true) {
 		pr_err("cm_prox_work: proximity work is still running during suspend. (just ignore) \n");
 		mutex_unlock(&data->mutex);
@@ -954,9 +968,8 @@ static void cm_prox_work(struct work_struct *work)
 	}
 
 	ret = cm_i2c_read_word(client, PS_DATA, &raw);
-	if (ret < 0) {
+	if (ret < 0)
 		goto exit_to_prx_schedule;
-	}
 
 	changed = cm_is_near_far_changed(data, raw);
 	el_data.data1 = data->prox_near ? 0 : 5;
@@ -970,8 +983,9 @@ static void cm_prox_work(struct work_struct *work)
 			if (ret < 0)
 				dev_err(&client->dev, "failed to push proximity "
 					"data to buffer, err=%d\n", ret);
-		} else
+		} else {
 			pr_err("cm36686: ignore proximity interrupt while proximity is disabled\n");
+		}
 	}
 
 	if (data->dump_register)
@@ -982,7 +996,8 @@ static void cm_prox_work(struct work_struct *work)
 
 exit_to_prx_schedule:
 	if (data->prox_continus)
-	    schedule_delayed_work(&data->prox_delayed_work, CM36686_PROX_DELAY * HZ / 1000);
+		schedule_delayed_work(&data->prox_delayed_work,
+				CM36686_PROX_DELAY * HZ / 1000);
 	mutex_unlock(&data->mutex);
 }
 
@@ -992,16 +1007,15 @@ static void cm_als_work(struct work_struct *work)
 				struct cm36686_data, als_delayed_work);
 	struct i2c_client *client = data->client;
 	struct cm36686_el_data el_data;
-	int ret = 0;
-	uint16_t raw;
 	struct timespec ts;
 	static unsigned int err_cnt;
+	uint16_t raw;
+	int ret = 0;
 
 	get_monotonic_boottime(&ts);
 	el_data.timestamp = timespec_to_ns(&ts);
 
 	mutex_lock(&data->mutex);
-
 	if (data->suspended == true) {
 		pr_err("cm_als_work: als work is still running during suspend. (just ignore) \n");
 		mutex_unlock(&data->mutex);
@@ -1012,6 +1026,7 @@ static void cm_als_work(struct work_struct *work)
 	if (ret < 0) {
 		goto exit_to_als_schedule;
 	}
+
 	el_data.data1 = raw;
 	data->als_raw = raw;
 	if (data->als_enabled == true) {
@@ -1027,8 +1042,10 @@ static void cm_als_work(struct work_struct *work)
 				show_state_filter(0);
 			}
 		}
-	} else
+	} else {
 		pr_err("cm_als_work: ignore the als data while the als is disabled\n");
+	}
+
 	if (data->dump_register)
 		dump_register(client);
 	if (data->dump_output)
@@ -1036,7 +1053,8 @@ static void cm_als_work(struct work_struct *work)
 				el_data.data1, el_data.timestamp);
 
 exit_to_als_schedule:
-	schedule_delayed_work(&data->als_delayed_work, CM36686_ALS_DELAY * HZ / 1000);
+	schedule_delayed_work(&data->als_delayed_work,
+			CM36686_ALS_DELAY * HZ / 1000);
 	mutex_unlock(&data->mutex);
 }
 
@@ -1055,6 +1073,7 @@ int cm_setup_trigger_sensor(struct iio_dev *indio_dev)
 
 	trigger->dev.parent = indio_dev->dev.parent;
 	trigger->ops = &cm_sensor_trigger_ops;
+
 	ret = iio_trigger_register(trigger);
 	if (ret < 0)
 		goto exit_free_trigger;
@@ -1068,12 +1087,11 @@ exit_free_trigger:
 	return ret;
 }
 
-
 static int cm_proximity_iio_setup(struct cm36686_data *data)
 {
 	struct i2c_client *client = data->client;
-	struct iio_dev *idev;
 	struct cm36686_data **priv_data;
+	struct iio_dev *idev;
 	int ret = 0;
 
 	idev = iio_device_alloc(sizeof(*priv_data));
@@ -1094,8 +1112,7 @@ static int cm_proximity_iio_setup(struct cm36686_data *data)
 	priv_data = iio_priv(idev);
 	*priv_data = data;
 
-	ret = iio_triggered_buffer_setup(idev, NULL, NULL,
-					&cm_buffer_setup_ops);
+	ret = iio_triggered_buffer_setup(idev, NULL, NULL, &cm_buffer_setup_ops);
 	if (ret < 0)
 		goto free_iio_p;
 
@@ -1108,6 +1125,7 @@ static int cm_proximity_iio_setup(struct cm36686_data *data)
 		dev_err(&client->dev, "Proximity IIO register fail\n");
 		goto free_trigger_p;
 	}
+
 	return ret;
 
 free_trigger_p:
@@ -1124,8 +1142,8 @@ free_iio_p:
 static int cm_light_iio_setup(struct cm36686_data *data)
 {
 	struct i2c_client *client = data->client;
-	struct iio_dev *idev;
 	struct cm36686_data **priv_data;
+	struct iio_dev *idev;
 	int ret = 0;
 
 	idev = iio_device_alloc(sizeof(*priv_data));
@@ -1160,6 +1178,7 @@ static int cm_light_iio_setup(struct cm36686_data *data)
 		dev_err(&client->dev, "ALS IIO register fail\n");
 		goto free_trigger_a;
 	}
+
 	return ret;
 
 free_trigger_a:
@@ -1175,9 +1194,9 @@ free_iio_a:
 
 static int cm_parse_dt(struct i2c_client *client)
 {
-	int ret = 0;
-	struct device_node *np = client->dev.of_node;
 	struct cm36686_platform_data *pdata;
+	struct device_node *np = client->dev.of_node;
+	int ret = 0;
 
 	if (!np)
 		return -ENOENT;
@@ -1186,19 +1205,23 @@ static int cm_parse_dt(struct i2c_client *client)
 	if (!pdata)
 		return -ENOMEM;
 
-	ret = of_property_read_u32(np, "als_trans_ratio", (u32 *)&pdata->als_trans_ratio);
+	ret = of_property_read_u32(np, "als_trans_ratio",
+			(u32 *)&pdata->als_trans_ratio);
 	if (ret < 0)
 		goto free_platform_data;
 
-	ret = of_property_read_u32(np, "prox_default_offset", (u32 *)&pdata->prox_default_offset);
+	ret = of_property_read_u32(np, "prox_default_offset",
+			(u32 *)&pdata->prox_default_offset);
 	if (ret < 0)
 		goto free_platform_data;
 
-	ret = of_property_read_u32(np, "prox_thres_near", (u32 *)&pdata->prox_default_thres_near);
+	ret = of_property_read_u32(np, "prox_thres_near",
+			(u32 *)&pdata->prox_default_thres_near);
 	if (ret < 0)
 		goto free_platform_data;
 
-	ret = of_property_read_u32(np, "prox_thres_far", (u32 *)&pdata->prox_default_thres_far);
+	ret = of_property_read_u32(np, "prox_thres_far",
+			(u32 *)&pdata->prox_default_thres_far);
 	if (ret < 0)
 		goto free_platform_data;
 
@@ -1233,13 +1256,13 @@ static irqreturn_t cm_irq_handler(int irq, void *private)
 }
 static irqreturn_t cm_irqthread_handler(int irq, void *dev_id)
 {
-	int ret;
-	uint16_t int_reg;
 	struct cm36686_data *data = (struct cm36686_data *)dev_id;
 	struct i2c_client *client = data->client;
 	struct cm36686_el_data el_data;
-	uint16_t raw;
 	struct timespec ts;
+	uint16_t int_reg;
+	uint16_t raw;
+	int ret;
 
 	get_monotonic_boottime(&ts);
 	el_data.timestamp = timespec_to_ns(&ts);
@@ -1259,9 +1282,9 @@ static irqreturn_t cm_irqthread_handler(int irq, void *dev_id)
 			el_data.data1 = 0;
 
 		ret = cm_i2c_read_word(client, PS_DATA, &raw);
-		if (ret < 0) {
+		if (ret < 0)
 			goto cm_end_irq;
-		}
+
 		el_data.data2 = raw;
 		pr_debug("cm36686: proximity rawdata = %d\n", raw);
 
@@ -1272,15 +1295,16 @@ static irqreturn_t cm_irqthread_handler(int irq, void *dev_id)
 			if (ret < 0)
 				dev_err(&client->dev, "failed to push proximity "
 					"data to buffer, err=%d\n", ret);
-		} else
+		} else {
 			pr_err("cm36686: ignore proximity interrupt while proximity is disabled\n");
-
+		}
 		mutex_unlock(&data->mutex);
 	}
 
 cm_end_irq:
 	return IRQ_HANDLED;
 }
+
 static int cm_prox_teardown(struct cm36686_data *data)
 {
 	cancel_delayed_work_sync(&data->prox_delayed_work);
@@ -1308,18 +1332,19 @@ static int cm_als_teardown(struct cm36686_data *data)
 static int cm36686_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
-	int ret = 0;
-	struct cm36686_data *data;
 	struct cm36686_platform_data *pdata;
-	struct regulator *cm_vdd;
+	struct cm36686_data *data;
 	struct regulator *prox_int_vdd;
 	struct regulator *i2c_vdd;
+	struct regulator *cm_vdd;
+	int ret = 0;
 
 	dev_info(&client->dev, "start cm36686 PLSensor probe\n");
 
 	cm_vdd = regulator_get(&client->dev, "vdd");
 	if (IS_ERR(cm_vdd)) {
-		dev_err(&client->dev,	"Regulator get failed vdd ret=%ld\n", PTR_ERR(cm_vdd));
+		dev_err(&client->dev,	"Regulator get failed vdd ret=%ld\n",
+				PTR_ERR(cm_vdd));
 		return IS_ERR(cm_vdd);
 	}
 
@@ -1331,7 +1356,8 @@ static int cm36686_probe(struct i2c_client *client,
 
 	prox_int_vdd = regulator_get(&client->dev, "prox-int");
 	if (IS_ERR(prox_int_vdd)) {
-		dev_err(&client->dev,	"Regulator get failed prox-int ret=%ld\n", PTR_ERR(prox_int_vdd));
+		dev_err(&client->dev,	"Regulator get failed prox-int ret=%ld\n",
+				PTR_ERR(prox_int_vdd));
 		return IS_ERR(prox_int_vdd);
 	}
 
@@ -1343,7 +1369,8 @@ static int cm36686_probe(struct i2c_client *client,
 
 	i2c_vdd = regulator_get(&client->dev, "i2c");
 	if (IS_ERR(i2c_vdd)) {
-		dev_err(&client->dev,	"Regulator get failed i2c ret=%ld\n", PTR_ERR(i2c_vdd));
+		dev_err(&client->dev,	"Regulator get failed i2c ret=%ld\n",
+				PTR_ERR(i2c_vdd));
 		return IS_ERR(i2c_vdd);
 	}
 
@@ -1381,6 +1408,7 @@ static int cm36686_probe(struct i2c_client *client,
 	data->prox_offset = pdata->prox_default_offset;
 	data->prox_thres_near = pdata->prox_default_thres_near;
 	data->prox_thres_far = pdata->prox_default_thres_far;
+
 	INIT_DELAYED_WORK(&data->prox_delayed_work, cm_prox_work);
 	INIT_DELAYED_WORK(&data->als_delayed_work, cm_als_work);
 
@@ -1397,6 +1425,7 @@ static int cm36686_probe(struct i2c_client *client,
 		dev_err(&client->dev, "init wakeup failed: err=%d\n", ret);
 		goto err_free_pdata;
 	}
+
 	ret = cm_proximity_iio_setup(data);
 	if (ret < 0)
 		goto err_free_pdata;
@@ -1439,7 +1468,6 @@ static int cm36686_suspend(struct device *dev)
 	struct cm36686_data *data = dev_get_drvdata(dev);
 
 	mutex_lock(&data->mutex);
-
 	if (data->prox_enabled && data->prox_continus == CM36686_INT_MODE) {
 		mutex_unlock(&data->mutex);
 		enable_irq_wake(data->irq);
@@ -1465,7 +1493,6 @@ static int cm36686_suspend(struct device *dev)
 		als_on_in_suspend = 1;
 		mutex_lock(&data->mutex);
 	}
-
 	mutex_unlock(&data->mutex);
 
 	return ret;
@@ -1477,7 +1504,6 @@ static int cm36686_resume(struct device *dev)
 	struct cm36686_data *data = dev_get_drvdata(dev);
 
 	mutex_lock(&data->mutex);
-
 	if (data->prox_enabled && data->prox_continus == CM36686_INT_MODE) {
 		disable_irq_wake(data->irq);
 		enable_irq(data->irq);
@@ -1488,14 +1514,16 @@ static int cm36686_resume(struct device *dev)
 	if (data->prox_enabled && data->prox_continus == CM36686_POLLING_MODE) {
 		pr_warning("cm36686_resume set prox_delayed_work\n");
 		psensor_enable(data->prox_idev, true, CM36686_POLLING_MODE);
-		schedule_delayed_work(&data->prox_delayed_work, CM36686_PROX_DELAY * HZ / 1000);
+		schedule_delayed_work(&data->prox_delayed_work,
+				CM36686_PROX_DELAY * HZ / 1000);
 	}
 
 	if (als_on_in_suspend) {
 		als_on_in_suspend = 0;
 		pr_warning("cm36686_resume set als_delayed_work\n");
 		lsensor_enable(data->als_idev, true, CM36686_POLLING_MODE);
-		schedule_delayed_work(&data->als_delayed_work, CM36686_ALS_DELAY * HZ / 1000);
+		schedule_delayed_work(&data->als_delayed_work,
+				CM36686_ALS_DELAY * HZ / 1000);
 	}
 	mutex_unlock(&data->mutex);
 
