@@ -1170,7 +1170,7 @@ static void smbchg_usb_update_online_work(struct work_struct *work)
 	bool user_enabled = (chip->usb_suspended & REASON_USER) == 0;
 	int online;
 
-	online = user_enabled && chip->usb_present && !chip->very_weak_charger;
+	online = user_enabled && chip->usb_present;
 
 	mutex_lock(&chip->usb_set_online_lock);
 	if (chip->usb_online != online) {
