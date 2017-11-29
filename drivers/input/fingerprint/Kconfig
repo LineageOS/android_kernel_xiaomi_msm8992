@@ -1,0 +1,5 @@
+config FINGERPRINT_AQUA
+	tristate "Mi4S fingerprint support"
+	depends on SPI
+	help
+	  Say Y here if you have a Mi4s.
